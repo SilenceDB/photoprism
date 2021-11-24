@@ -9,8 +9,10 @@ import (
 
 	"github.com/gosimple/slug"
 	"github.com/jinzhu/gorm"
+
 	"github.com/photoprism/photoprism/internal/event"
 	"github.com/photoprism/photoprism/internal/form"
+	"github.com/photoprism/photoprism/internal/maps"
 	"github.com/photoprism/photoprism/pkg/rnd"
 	"github.com/photoprism/photoprism/pkg/txt"
 	"github.com/ulule/deepcopier"
@@ -175,6 +177,9 @@ func NewMomentsAlbum(albumTitle, albumSlug, albumFilter string) *Album {
 
 // NewStateAlbum creates a new moment.
 func NewStateAlbum(albumTitle, albumSlug, albumFilter string) *Album {
+	albumTitle = strings.TrimSpace(albumTitle)
+	albumSlug = strings.TrimSpace(albumSlug)
+
 	if albumTitle == "" || albumSlug == "" || albumFilter == "" {
 		return nil
 	}
@@ -196,6 +201,9 @@ func NewStateAlbum(albumTitle, albumSlug, albumFilter string) *Album {
 
 // NewMonthAlbum creates a new month album.
 func NewMonthAlbum(albumTitle, albumSlug string, year, month int) *Album {
+	albumTitle = strings.TrimSpace(albumTitle)
+	albumSlug = strings.TrimSpace(albumSlug)
+
 	if albumTitle == "" || albumSlug == "" || year == 0 || month == 0 {
 		return nil
 	}
@@ -223,11 +231,33 @@ func NewMonthAlbum(albumTitle, albumSlug string, year, month int) *Album {
 	return result
 }
 
+// FindMonthAlbum finds a matching month album or returns nil.
+func FindMonthAlbum(year, month int) *Album {
+	result := Album{}
+
+	if err := UnscopedDb().Where("album_year = ? AND album_month = ? AND album_type = ?", year, month, AlbumMonth).First(&result).Error; err != nil {
+		return nil
+	}
+
+	return &result
+}
+
 // FindAlbumBySlug finds a matching album or returns nil.
 func FindAlbumBySlug(albumSlug, albumType string) *Album {
 	result := Album{}
 
 	if err := UnscopedDb().Where("album_slug = ? AND album_type = ?", albumSlug, albumType).First(&result).Error; err != nil {
+		return nil
+	}
+
+	return &result
+}
+
+// FindAlbumByFilter finds a matching album or returns nil.
+func FindAlbumByFilter(albumFilter, albumType string) *Album {
+	result := Album{}
+
+	if err := UnscopedDb().Where("album_filter = ? AND album_type = ?", albumFilter, albumType).First(&result).Error; err != nil {
 		return nil
 	}
 
@@ -298,6 +328,16 @@ func (m *Album) IsMoment() bool {
 	return m.AlbumType == AlbumMoment
 }
 
+// IsState tests if the album is of type state.
+func (m *Album) IsState() bool {
+	return m.AlbumType == AlbumState
+}
+
+// IsDefault tests if the album is a regular album.
+func (m *Album) IsDefault() bool {
+	return m.AlbumType == AlbumDefault
+}
+
 // SetTitle changes the album name.
 func (m *Album) SetTitle(title string) {
 	title = strings.TrimSpace(title)
@@ -308,7 +348,7 @@ func (m *Album) SetTitle(title string) {
 
 	m.AlbumTitle = txt.Clip(title, txt.ClipDefault)
 
-	if m.AlbumType == AlbumDefault {
+	if m.AlbumType == AlbumDefault || m.AlbumSlug == "" {
 		if len(m.AlbumTitle) < txt.ClipSlug {
 			m.AlbumSlug = txt.Slug(m.AlbumTitle)
 		} else {
@@ -319,6 +359,69 @@ func (m *Album) SetTitle(title string) {
 	if m.AlbumSlug == "" {
 		m.AlbumSlug = "-"
 	}
+}
+
+// UpdateSlug updates title and slug of generated albums if needed.
+func (m *Album) UpdateSlug(title, slug string) error {
+	title = strings.TrimSpace(title)
+	slug = strings.TrimSpace(slug)
+
+	if title == "" || slug == "" {
+		return nil
+	}
+
+	changed := false
+
+	if m.AlbumSlug != slug {
+		m.AlbumSlug = slug
+		changed = true
+	}
+
+	if !changed {
+		return nil
+	}
+
+	m.AlbumTitle = title
+
+	return m.Updates(Values{"album_title": m.AlbumTitle, "album_slug": m.AlbumSlug})
+}
+
+// UpdateState updates the album location.
+func (m *Album) UpdateState(title, slug, stateName, countryCode string) error {
+	if title == "" || slug == "" || stateName == "" || countryCode == "" {
+		return nil
+	}
+
+	changed := false
+	countryName := maps.CountryName(countryCode)
+
+	if m.AlbumCountry != countryCode {
+		m.AlbumCountry = countryCode
+		changed = true
+	}
+
+	if changed || m.AlbumLocation == "" {
+		m.AlbumLocation = countryName
+		changed = true
+	}
+
+	if m.AlbumState != stateName {
+		m.AlbumState = stateName
+		changed = true
+	}
+
+	if m.AlbumSlug != slug {
+		m.AlbumSlug = slug
+		changed = true
+	}
+
+	if !changed {
+		return nil
+	}
+
+	m.AlbumTitle = title
+
+	return m.Updates(Values{"album_title": m.AlbumTitle, "album_slug": m.AlbumSlug, "album_location": m.AlbumLocation, "album_country": m.AlbumCountry, "album_state": m.AlbumState})
 }
 
 // SaveForm updates the entity using form data and stores it in the database.
@@ -341,6 +444,11 @@ func (m *Album) SaveForm(f form.Album) error {
 // Update sets a new value for a database column.
 func (m *Album) Update(attr string, value interface{}) error {
 	return UnscopedDb().Model(m).UpdateColumn(attr, value).Error
+}
+
+// Updates multiple columns in the database.
+func (m *Album) Updates(values interface{}) error {
+	return UnscopedDb().Model(m).UpdateColumns(values).Error
 }
 
 // UpdateFolder updates the path, filter and slug for a folder album.
@@ -376,17 +484,25 @@ func (m *Album) Create() error {
 		return err
 	}
 
+	m.PublishCountChange(1)
+
+	return nil
+}
+
+// PublishCountChange publishes an event with the added or removed number of albums.
+func (m *Album) PublishCountChange(n int) {
+	data := event.Data{"count": n}
+
 	switch m.AlbumType {
 	case AlbumDefault:
-		event.Publish("count.albums", event.Data{"count": 1})
+		event.Publish("count.albums", data)
 	case AlbumMoment:
-		event.Publish("count.moments", event.Data{"count": 1})
+		event.Publish("count.moments", data)
 	case AlbumMonth:
-		event.Publish("count.months", event.Data{"count": 1})
+		event.Publish("count.months", data)
 	case AlbumFolder:
-		event.Publish("count.folders", event.Data{"count": 1})
+		event.Publish("count.folders", data)
 	}
-	return nil
 }
 
 // Delete marks the entity as deleted in the database.
@@ -399,18 +515,24 @@ func (m *Album) Delete() error {
 		return err
 	}
 
-	switch m.AlbumType {
-	case AlbumDefault:
-		event.Publish("count.albums", event.Data{"count": -1})
-	case AlbumMoment:
-		event.Publish("count.moments", event.Data{"count": -1})
-	case AlbumMonth:
-		event.Publish("count.months", event.Data{"count": -1})
-	case AlbumFolder:
-		event.Publish("count.folders", event.Data{"count": -1})
+	m.PublishCountChange(-1)
+
+	return DeleteShareLinks(m.AlbumUID)
+}
+
+// DeletePermanently permanently removes an album from the index.
+func (m *Album) DeletePermanently() error {
+	wasDeleted := m.Deleted()
+
+	if err := UnscopedDb().Delete(m).Error; err != nil {
+		return err
 	}
 
-	return nil
+	if !wasDeleted {
+		m.PublishCountChange(-1)
+	}
+
+	return DeleteShareLinks(m.AlbumUID)
 }
 
 // Deleted tests if the entity is deleted.
@@ -430,16 +552,7 @@ func (m *Album) Restore() error {
 
 	m.DeletedAt = nil
 
-	switch m.AlbumType {
-	case AlbumDefault:
-		event.Publish("count.albums", event.Data{"count": 1})
-	case AlbumMoment:
-		event.Publish("count.moments", event.Data{"count": 1})
-	case AlbumMonth:
-		event.Publish("count.months", event.Data{"count": 1})
-	case AlbumFolder:
-		event.Publish("count.folders", event.Data{"count": 1})
-	}
+	m.PublishCountChange(1)
 
 	return nil
 }
