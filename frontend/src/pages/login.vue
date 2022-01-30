@@ -39,11 +39,9 @@
               ></v-text-field>
             </v-flex>
             <v-flex xs12 class="px-2 py-3">
-              <v-btn color="primary-button"
+              <v-btn depressed :disabled="loading || !password || !username"
                      class="white--text ml-0 action-confirm"
-                     depressed
-                     :disabled="loading || !password || !username"
-                     @click.stop="login">
+                     color="primary-button" @click.stop="login">
                 <translate>Sign in</translate>
                 <v-icon :right="!rtl" :left="rtl" dark>login</v-icon>
               </v-btn>
@@ -53,21 +51,22 @@
       </v-card>
     </v-form>
 
-    <p-about-footer></p-about-footer>
+    <p-about-footer v-if="!sponsor"></p-about-footer>
   </div>
 </template>
 
 <script>
 export default {
-  name: 'Login',
+  name: "PPageLogin",
   data() {
     const c = this.$config.values;
 
     return {
       loading: false,
       showPassword: false,
-      username: "admin",
+      username: "",
       password: "",
+      sponsor: this.$config.isSponsor(),
       siteDescription: c.siteDescription ? c.siteDescription : c.siteCaption,
       nextUrl: this.$route.params.nextUrl ? this.$route.params.nextUrl : "/",
       rtl: this.$rtl,

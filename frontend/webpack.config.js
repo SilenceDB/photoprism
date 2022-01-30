@@ -1,6 +1,6 @@
 /*
 
-Copyright (c) 2018 - 2021 Michael Mayer <hello@photoprism.org>
+Copyright (c) 2018 - 2022 Michael Mayer <hello@photoprism.app>
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published
@@ -20,17 +20,18 @@ Copyright (c) 2018 - 2021 Michael Mayer <hello@photoprism.org>
     offering commercial goods, products, or services without prior written permission.
     In other words, please ask.
 
-Feel free to send an e-mail to hello@photoprism.org if you have questions,
+Feel free to send an e-mail to hello@photoprism.app if you have questions,
 want to support our work, or just want to say hello.
 
 Additional information can be found in our Developer Guide:
-https://docs.photoprism.org/developer-guide/
+https://docs.photoprism.app/developer-guide/
 
 */
 
 const path = require("path");
 const MiniCssExtractPlugin = require("mini-css-extract-plugin");
 const ESLintPlugin = require("eslint-webpack-plugin");
+const { WebpackManifestPlugin } = require("webpack-manifest-plugin");
 const OfflinePlugin = require("@lcdp/offline-plugin");
 const webpack = require("webpack");
 const isDev = process.env.NODE_ENV !== "production";
@@ -48,6 +49,7 @@ const PATHS = {
   js: path.join(__dirname, "src"),
   css: path.join(__dirname, "src/css"),
   build: path.join(__dirname, "../assets/static/build"),
+  public: "./",
 };
 
 const config = {
@@ -62,7 +64,9 @@ const config = {
   },
   output: {
     path: PATHS.build,
-    filename: "[name].js",
+    publicPath: PATHS.public,
+    filename: "[name].[contenthash].js",
+    clean: true,
   },
   resolve: {
     modules: [path.join(__dirname, "src"), path.join(__dirname, "node_modules")],
@@ -72,8 +76,12 @@ const config = {
   },
   plugins: [
     new MiniCssExtractPlugin({
-      filename: "[name].css",
+      filename: "[name].[contenthash].css",
       experimentalUseImportModule: false,
+    }),
+    new WebpackManifestPlugin({
+      fileName: "assets.json",
+      publicPath: "",
     }),
     new webpack.ProgressPlugin(),
     new VueLoaderPlugin(),
@@ -135,7 +143,7 @@ const config = {
           {
             loader: MiniCssExtractPlugin.loader,
             options: {
-              publicPath: PATHS.build,
+              publicPath: PATHS.public,
             },
           },
           {
@@ -164,7 +172,7 @@ const config = {
           {
             loader: MiniCssExtractPlugin.loader,
             options: {
-              publicPath: PATHS.build,
+              publicPath: PATHS.public,
             },
           },
           {
@@ -192,7 +200,7 @@ const config = {
           {
             loader: MiniCssExtractPlugin.loader,
             options: {
-              publicPath: PATHS.build,
+              publicPath: PATHS.public,
             },
           },
           {
@@ -217,34 +225,24 @@ const config = {
       },
       {
         test: /\.(png|jpg|jpeg|gif)$/,
-        loader: "file-loader",
-        options: {
-          name: "[hash].[ext]",
-          publicPath: "./img",
-          outputPath: "img",
-        },
+        type: "asset/resource",
+        dependency: { not: ["url"] },
       },
       {
         test: /\.(woff(2)?|ttf|eot)(\?v=\d+\.\d+\.\d+)?$/,
-        loader: "file-loader",
-        options: {
-          name: "[hash].[ext]",
-          publicPath: "./fonts",
-          outputPath: "fonts",
-        },
+        type: "asset/resource",
+        dependency: { not: ["url"] },
       },
       {
         test: /\.svg/,
-        use: {
-          loader: "svg-url-loader",
-          options: {},
-        },
+        type: "asset/resource",
+        dependency: { not: ["url"] },
       },
     ],
   },
 };
 
-// No sourcemap for production
+// Don't create sourcemap for production builds.
 if (isDev) {
   const devToolPlugin = new webpack.SourceMapDevToolPlugin({
     filename: "[file].map",

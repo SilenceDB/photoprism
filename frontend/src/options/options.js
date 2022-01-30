@@ -216,6 +216,11 @@ export const Themes = () => [
     disabled: false,
   },
   {
+    text: $gettext("Abyss"),
+    value: "abyss",
+    disabled: false,
+  },
+  {
     text: $gettext("Moonlight"),
     value: "moonlight",
     disabled: false,
@@ -233,6 +238,11 @@ export const Themes = () => [
   {
     text: $gettext("Lavender"),
     value: "lavender",
+    disabled: false,
+  },
+  {
+    text: $gettext("Gemstone"),
+    value: "gemstone",
     disabled: false,
   },
   {
@@ -287,14 +297,17 @@ export const MapsStyle = () => [
   {
     text: $gettext("Hybrid"),
     value: "hybrid",
+    sponsor: true,
   },
   {
     text: $gettext("Topographic"),
     value: "topographique",
+    sponsor: true,
   },
   {
     text: $gettext("Outdoor"),
     value: "outdoor",
+    sponsor: true,
   },
 ];
 

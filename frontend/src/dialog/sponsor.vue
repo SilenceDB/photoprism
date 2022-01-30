@@ -15,14 +15,14 @@
       </v-card-title>
       <v-card-text>
         <p class="body-1">
-          <translate>This is an early-access feature to say thanks to our sponsors and contributors.</translate>
+          <translate>This currently is a sponsor feature to thank everyone who supports the development of this application.</translate>
           <translate>We'll let you know how to enable it when you sign up on Patreon or GitHub Sponsors.</translate>
         </p>
         <p class="body-1">
-          <translate>Your continued support helps us provide services like satellite maps and develop new features.</translate>
+          <translate>Your continued support helps us provide regular updates and services like world maps.</translate>
         </p>
         <p class="body-1">
-          <translate>Please contact us at hello@photoprism.app if you have questions or need help.</translate>
+          <translate>Feel free to contact us at hello@photoprism.app if you have any questions.</translate>
         </p>
       </v-card-text>
       <v-card-actions class="pt-0">

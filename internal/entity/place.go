@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/photoprism/photoprism/internal/maps"
-	"github.com/photoprism/photoprism/pkg/txt"
+	"github.com/photoprism/photoprism/pkg/sanitize"
 )
 
 var placeMutex = sync.Mutex{}
@@ -46,7 +46,7 @@ var UnknownPlace = Place{
 
 // CreateUnknownPlace creates the default place if not exists.
 func CreateUnknownPlace() {
-	FirstOrCreatePlace(&UnknownPlace)
+	UnknownPlace = *FirstOrCreatePlace(&UnknownPlace)
 }
 
 // FindPlace finds a matching place or returns nil.
@@ -54,7 +54,7 @@ func FindPlace(id string) *Place {
 	place := Place{}
 
 	if err := Db().Where("id = ?", id).First(&place).Error; err != nil {
-		log.Debugf("place: %s no found", txt.Quote(id))
+		log.Debugf("place: %s not found", sanitize.Log(id))
 		return nil
 	} else {
 		return &place

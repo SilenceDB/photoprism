@@ -9,13 +9,14 @@ import (
 
 	"github.com/gosimple/slug"
 	"github.com/jinzhu/gorm"
+	"github.com/ulule/deepcopier"
 
 	"github.com/photoprism/photoprism/internal/event"
 	"github.com/photoprism/photoprism/internal/form"
 	"github.com/photoprism/photoprism/internal/maps"
 	"github.com/photoprism/photoprism/pkg/rnd"
+	"github.com/photoprism/photoprism/pkg/sanitize"
 	"github.com/photoprism/photoprism/pkg/txt"
-	"github.com/ulule/deepcopier"
 )
 
 const (
@@ -42,7 +43,7 @@ type Album struct {
 	AlbumCaption     string      `gorm:"type:TEXT;" json:"Caption" yaml:"Caption,omitempty"`
 	AlbumDescription string      `gorm:"type:TEXT;" json:"Description" yaml:"Description,omitempty"`
 	AlbumNotes       string      `gorm:"type:TEXT;" json:"Notes" yaml:"Notes,omitempty"`
-	AlbumFilter      string      `gorm:"type:VARBINARY(1024);" json:"Filter" yaml:"Filter,omitempty"`
+	AlbumFilter      string      `gorm:"type:VARBINARY(767);" json:"Filter" yaml:"Filter,omitempty"`
 	AlbumOrder       string      `gorm:"type:VARBINARY(32);" json:"Order" yaml:"Order,omitempty"`
 	AlbumTemplate    string      `gorm:"type:VARBINARY(255);" json:"Template" yaml:"Template,omitempty"`
 	AlbumState       string      `gorm:"type:VARCHAR(100);index;" json:"State" yaml:"State,omitempty"`
@@ -208,7 +209,7 @@ func NewMonthAlbum(albumTitle, albumSlug string, year, month int) *Album {
 		return nil
 	}
 
-	f := form.PhotoSearch{
+	f := form.SearchPhotos{
 		Year:   strconv.Itoa(year),
 		Month:  strconv.Itoa(month),
 		Public: true,
@@ -253,11 +254,19 @@ func FindAlbumBySlug(albumSlug, albumType string) *Album {
 	return &result
 }
 
-// FindAlbumByFilter finds a matching album or returns nil.
-func FindAlbumByFilter(albumFilter, albumType string) *Album {
+// FindAlbumByAttr finds an album by filters and slugs, or returns nil.
+func FindAlbumByAttr(slugs, filters []string, albumType string) *Album {
 	result := Album{}
 
-	if err := UnscopedDb().Where("album_filter = ? AND album_type = ?", albumFilter, albumType).First(&result).Error; err != nil {
+	stmt := UnscopedDb()
+
+	if albumType != "" {
+		stmt = stmt.Where("album_type = ?", albumType)
+	}
+
+	stmt = stmt.Where("album_slug IN (?) OR album_filter IN (?)", slugs, filters)
+
+	if err := stmt.First(&result).Error; err != nil {
 		return nil
 	}
 
@@ -275,7 +284,10 @@ func FindFolderAlbum(albumPath string) *Album {
 
 	result := Album{}
 
-	if err := UnscopedDb().Where("album_slug = ? AND album_type = ?", albumSlug, AlbumFolder).First(&result).Error; err != nil {
+	stmt := UnscopedDb().Where("album_type = ?", AlbumFolder)
+	stmt = stmt.Where("album_slug = ? OR album_path = ?", albumSlug, albumPath)
+
+	if err := stmt.First(&result).Error; err != nil {
 		return nil
 	}
 
@@ -290,7 +302,23 @@ func (m *Album) Find() error {
 		}
 	}
 
-	if err := UnscopedDb().First(m, "album_slug = ? AND album_type = ?", m.AlbumSlug, m.AlbumType).Error; err != nil {
+	if m.AlbumType == "" {
+		return fmt.Errorf("album type missing")
+	}
+
+	if m.AlbumSlug == "" {
+		return fmt.Errorf("album slug missing")
+	}
+
+	stmt := UnscopedDb().Where("album_type = ?", m.AlbumType)
+
+	if m.AlbumType != AlbumDefault && m.AlbumFilter != "" {
+		stmt = stmt.Where("album_slug = ? OR album_filter = ?", m.AlbumSlug, m.AlbumFilter)
+	} else {
+		stmt = stmt.Where("album_slug = ?", m.AlbumSlug)
+	}
+
+	if err := stmt.First(m).Error; err != nil {
 		return err
 	}
 
@@ -309,15 +337,15 @@ func (m *Album) BeforeCreate(scope *gorm.Scope) error {
 // String returns the id or name as string.
 func (m *Album) String() string {
 	if m.AlbumSlug != "" {
-		return m.AlbumSlug
+		return sanitize.Log(m.AlbumSlug)
 	}
 
 	if m.AlbumTitle != "" {
-		return txt.Quote(m.AlbumTitle)
+		return sanitize.Log(m.AlbumTitle)
 	}
 
 	if m.AlbumUID != "" {
-		return m.AlbumUID
+		return sanitize.Log(m.AlbumUID)
 	}
 
 	return "[unknown album]"

@@ -1,6 +1,6 @@
 /*
 
-Copyright (c) 2018 - 2021 Michael Mayer <hello@photoprism.org>
+Copyright (c) 2018 - 2022 Michael Mayer <hello@photoprism.app>
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published
@@ -20,11 +20,11 @@ Copyright (c) 2018 - 2021 Michael Mayer <hello@photoprism.org>
     offering commercial goods, products, or services without prior written permission.
     In other words, please ask.
 
-Feel free to send an e-mail to hello@photoprism.org if you have questions,
+Feel free to send an e-mail to hello@photoprism.app if you have questions,
 want to support our work, or just want to say hello.
 
 Additional information can be found in our Developer Guide:
-https://docs.photoprism.org/developer-guide/
+https://docs.photoprism.app/developer-guide/
 
 */
 
@@ -58,7 +58,7 @@ const num = "numeric";
 const short = "short";
 const long = "long";
 
-const DATE_FULL = {
+export const DATE_FULL = {
   year: num,
   month: long,
   day: num,
@@ -67,7 +67,7 @@ const DATE_FULL = {
   minute: num,
 };
 
-const DATE_FULL_TZ = {
+export const DATE_FULL_TZ = {
   year: num,
   month: long,
   day: num,
@@ -425,10 +425,10 @@ export class Photo extends RestModel {
     const file = this.videoFile();
 
     if (file) {
-      return `${config.contentUri}/videos/${file.Hash}/${config.previewToken()}/${FormatAvc}`;
+      return `${config.apiUri}/videos/${file.Hash}/${config.previewToken()}/${FormatAvc}`;
     }
 
-    return `${config.contentUri}/videos/${this.Hash}/${config.previewToken()}/${FormatAvc}`;
+    return `${config.apiUri}/videos/${this.Hash}/${config.previewToken()}/${FormatAvc}`;
   }
 
   mainFile() {

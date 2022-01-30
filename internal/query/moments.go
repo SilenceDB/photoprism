@@ -7,7 +7,9 @@ import (
 
 	"github.com/gosimple/slug"
 
+	"github.com/photoprism/photoprism/internal/entity"
 	"github.com/photoprism/photoprism/internal/maps"
+	"github.com/photoprism/photoprism/pkg/sanitize"
 	"github.com/photoprism/photoprism/pkg/txt"
 )
 
@@ -105,7 +107,7 @@ func (m Moment) CountryName() string {
 
 // Slug returns an identifier string for a moment.
 func (m Moment) Slug() (s string) {
-	state := txt.NormalizeState(m.State, m.Country)
+	state := sanitize.State(m.State, m.Country)
 
 	if state == "" {
 		return m.TitleSlug()
@@ -131,7 +133,7 @@ func (m Moment) TitleSlug() string {
 
 // Title returns an english title for the moment.
 func (m Moment) Title() string {
-	state := txt.NormalizeState(m.State, m.Country)
+	state := sanitize.State(m.State, m.Country)
 
 	if m.Year == 0 && m.Month == 0 {
 		if m.Label != "" {
@@ -227,7 +229,7 @@ func MomentsStates(threshold int) (results Moments, err error) {
 func MomentsLabels(threshold int) (results Moments, err error) {
 	var cats []string
 
-	for cat, _ := range MomentLabels {
+	for cat := range MomentLabels {
 		cats = append(cats, cat)
 	}
 
@@ -261,4 +263,25 @@ func MomentsLabels(threshold int) (results Moments, err error) {
 	}
 
 	return results, nil
+}
+
+// RemoveDuplicateMoments deletes generated albums with duplicate slug or filter.
+func RemoveDuplicateMoments() (removed int, err error) {
+	if res := UnscopedDb().Exec(`DELETE FROM links WHERE share_uid 
+		IN (SELECT a.album_uid FROM albums a JOIN albums b ON a.album_type = b.album_type 
+		AND a.album_type <> ? AND a.id > b.id WHERE (a.album_slug = b.album_slug 
+		OR a.album_filter = b.album_filter) GROUP BY a.album_uid)`, entity.AlbumDefault); res.Error != nil {
+		return removed, res.Error
+	}
+
+	if res := UnscopedDb().Exec(`DELETE FROM albums WHERE id 
+		IN (SELECT a.id FROM albums a JOIN albums b ON a.album_type = b.album_type 
+		AND a.album_type <> ? AND a.id > b.id WHERE (a.album_slug = b.album_slug 
+		OR a.album_filter = b.album_filter) GROUP BY a.album_uid)`, entity.AlbumDefault); res.Error != nil {
+		return removed, res.Error
+	} else if res.RowsAffected > 0 {
+		removed = int(res.RowsAffected)
+	}
+
+	return removed, nil
 }

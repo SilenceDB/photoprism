@@ -17,6 +17,7 @@ import (
 	"github.com/photoprism/photoprism/internal/event"
 	"github.com/photoprism/photoprism/internal/form"
 	"github.com/photoprism/photoprism/pkg/rnd"
+	"github.com/photoprism/photoprism/pkg/sanitize"
 	"github.com/photoprism/photoprism/pkg/txt"
 )
 
@@ -145,7 +146,7 @@ func SavePhotoForm(model Photo, form form.Photo) error {
 	}
 
 	if !model.HasID() {
-		return errors.New("can't save form when photo id is missing")
+		return errors.New("cannot save form when photo id is missing")
 	}
 
 	// Update time fields.
@@ -179,7 +180,7 @@ func SavePhotoForm(model Photo, form form.Photo) error {
 	}
 
 	if err := model.SyncKeywordLabels(); err != nil {
-		log.Errorf("photo %s: %s while syncing keywords and labels", model.PhotoUID, err)
+		log.Errorf("photo: %s %s while syncing keywords and labels", model.String(), err)
 	}
 
 	if err := model.UpdateTitle(model.ClassifyLabels()); err != nil {
@@ -187,7 +188,7 @@ func SavePhotoForm(model Photo, form form.Photo) error {
 	}
 
 	if err := model.IndexKeywords(); err != nil {
-		log.Errorf("photo %s: %s while indexing keywords", model.PhotoUID, err.Error())
+		log.Errorf("photo: %s %s while indexing keywords", model.String(), err.Error())
 	}
 
 	edited := TimeStamp()
@@ -210,15 +211,15 @@ func SavePhotoForm(model Photo, form form.Photo) error {
 func (m *Photo) String() string {
 	if m.PhotoUID == "" {
 		if m.PhotoName != "" {
-			return txt.Quote(m.PhotoName)
+			return sanitize.Log(m.PhotoName)
 		} else if m.OriginalName != "" {
-			return txt.Quote(m.OriginalName)
+			return sanitize.Log(m.OriginalName)
 		}
 
 		return "(unknown)"
 	}
 
-	return "uid " + txt.Quote(m.PhotoUID)
+	return "uid " + sanitize.Log(m.PhotoUID)
 }
 
 // FirstOrCreate fetches an existing row from the database or inserts a new one.
@@ -299,7 +300,7 @@ func (m *Photo) Find() error {
 // SaveLabels updates the photo after labels have changed.
 func (m *Photo) SaveLabels() error {
 	if !m.HasID() {
-		return errors.New("photo: can't save to database, id is empty")
+		return errors.New("photo: cannot save to database, id is empty")
 	}
 
 	labels := m.ClassifyLabels()
@@ -465,7 +466,7 @@ func (m *Photo) PreloadFiles() {
 		Where("files.photo_id = ? AND files.deleted_at IS NULL", m.ID).
 		Order("files.file_name DESC")
 
-	logError(q.Scan(&m.Files))
+	Log("photo", "preload files", q.Scan(&m.Files).Error)
 }
 
 // PreloadKeywords prepares gorm scope to retrieve photo keywords
@@ -476,7 +477,7 @@ func (m *Photo) PreloadKeywords() {
 		Joins("JOIN photos_keywords ON photos_keywords.keyword_id = keywords.id AND photos_keywords.photo_id = ?", m.ID).
 		Order("keywords.keyword ASC")
 
-	logError(q.Scan(&m.Keywords))
+	Log("photo", "preload files", q.Scan(&m.Keywords).Error)
 }
 
 // PreloadAlbums prepares gorm scope to retrieve photo albums
@@ -488,7 +489,7 @@ func (m *Photo) PreloadAlbums() {
 		Where("albums.deleted_at IS NULL").
 		Order("albums.album_title ASC")
 
-	logError(q.Scan(&m.Albums))
+	Log("photo", "preload albums", q.Scan(&m.Albums).Error)
 }
 
 // PreloadMany prepares gorm scope to retrieve photo file, albums and keywords
@@ -561,12 +562,12 @@ func (m *Photo) AddLabels(labels classify.Labels) {
 		labelEntity := FirstOrCreateLabel(NewLabel(classifyLabel.Title(), classifyLabel.Priority))
 
 		if labelEntity == nil {
-			log.Errorf("index: label %s should not be nil - bug? (%s)", txt.Quote(classifyLabel.Title()), m)
+			log.Errorf("index: label %s should not be nil - bug? (%s)", sanitize.Log(classifyLabel.Title()), m)
 			continue
 		}
 
 		if labelEntity.Deleted() {
-			log.Debugf("index: skipping deleted label %s (%s)", txt.Quote(classifyLabel.Title()), m)
+			log.Debugf("index: skipping deleted label %s (%s)", sanitize.Log(classifyLabel.Title()), m)
 			continue
 		}
 
@@ -610,126 +611,10 @@ func (m *Photo) SetDescription(desc, source string) {
 	m.DescriptionSrc = source
 }
 
-// SetTakenAt changes the photo date if not empty and from the same source.
-func (m *Photo) SetTakenAt(taken, local time.Time, zone, source string) {
-	if taken.IsZero() || taken.Year() < 1000 || taken.Year() > txt.YearMax {
-		return
-	}
-
-	if SrcPriority[source] < SrcPriority[m.TakenSrc] && !m.TakenAt.IsZero() {
-		return
-	}
-
-	// Remove time zone if time was extracted from file name.
-	if source == SrcName {
-		zone = ""
-	}
-
-	// Round times to avoid jitter.
-	taken = taken.Round(time.Second).UTC()
-
-	// Default local time to taken if zero or invalid.
-	if local.IsZero() || local.Year() < 1000 {
-		local = taken
-	} else {
-		local = local.Round(time.Second)
-	}
-
-	// Don't update older date.
-	if SrcPriority[source] <= SrcPriority[SrcAuto] && !m.TakenAt.IsZero() && taken.After(m.TakenAt) {
-		return
-	}
-
-	// Set UTC time and date source.
-	m.TakenAt = taken
-	m.TakenAtLocal = local
-	m.TakenSrc = source
-
-	if zone == time.UTC.String() && m.TimeZone != "" {
-		// Location exists, set local time from UTC.
-		m.TakenAtLocal = m.GetTakenAtLocal()
-	} else if zone != "" {
-		// Apply new time zone.
-		m.TimeZone = zone
-		m.TakenAt = m.GetTakenAt()
-	} else if m.TimeZoneUTC() {
-		// Local is UTC.
-		m.TimeZone = zone
-		m.TakenAtLocal = taken
-	} else if m.TimeZone != "" {
-		// Apply existing time zone.
-		m.TakenAt = m.GetTakenAt()
-	}
-
-	m.UpdateDateFields()
-}
-
-// TimeZoneUTC tests if the current time zone is UTC.
-func (m *Photo) TimeZoneUTC() bool {
-	return strings.EqualFold(m.TimeZone, time.UTC.String())
-}
-
-// UpdateTimeZone updates the time zone.
-func (m *Photo) UpdateTimeZone(zone string) {
-	if zone == "" || zone == time.UTC.String() || zone == m.TimeZone {
-		return
-	}
-
-	if SrcPriority[m.TakenSrc] >= SrcPriority[SrcManual] && m.TimeZone != "" {
-		return
-	}
-
-	if m.TimeZoneUTC() {
-		m.TimeZone = zone
-		m.TakenAtLocal = m.GetTakenAtLocal()
-	} else {
-		m.TimeZone = zone
-		m.TakenAt = m.GetTakenAt()
-	}
-}
-
-// UpdateDateFields updates internal date fields.
-func (m *Photo) UpdateDateFields() {
-	if m.TakenAt.IsZero() || m.TakenAt.Year() < 1000 {
-		return
-	}
-
-	if m.TakenAtLocal.IsZero() || m.TakenAtLocal.Year() < 1000 {
-		m.TakenAtLocal = m.TakenAt
-	}
-
-	// Set date to unknown if file system date is about the same as indexing time.
-	if m.TakenSrc == SrcAuto && m.TakenAt.After(m.CreatedAt.Add(-24*time.Hour)) {
-		m.PhotoYear = UnknownYear
-		m.PhotoMonth = UnknownMonth
-		m.PhotoDay = UnknownDay
-	} else if m.TakenSrc != SrcManual {
-		m.PhotoYear = m.TakenAtLocal.Year()
-		m.PhotoMonth = int(m.TakenAtLocal.Month())
-		m.PhotoDay = m.TakenAtLocal.Day()
-	}
-}
-
-// SetCoordinates changes the photo lat, lng and altitude if not empty and from the same source.
-func (m *Photo) SetCoordinates(lat, lng float32, altitude int, source string) {
-	if lat == 0.0 && lng == 0.0 {
-		return
-	}
-
-	if SrcPriority[source] < SrcPriority[m.PlaceSrc] && m.HasLatLng() {
-		return
-	}
-
-	m.PhotoLat = lat
-	m.PhotoLng = lng
-	m.PhotoAltitude = altitude
-	m.PlaceSrc = source
-}
-
 // SetCamera updates the camera.
 func (m *Photo) SetCamera(camera *Camera, source string) {
 	if camera == nil {
-		log.Warnf("photo %s: failed updating camera from source %s", txt.Quote(m.PhotoUID), SrcString(source))
+		log.Warnf("photo: %s failed updating camera from source %s", m.String(), SrcString(source))
 		return
 	}
 
@@ -749,7 +634,7 @@ func (m *Photo) SetCamera(camera *Camera, source string) {
 // SetLens updates the lens.
 func (m *Photo) SetLens(lens *Lens, source string) {
 	if lens == nil {
-		log.Warnf("photo %s: failed updating lens from source %s", txt.Quote(m.PhotoUID), SrcString(source))
+		log.Warnf("photo: %s failed updating lens from source %s", m.String(), SrcString(source))
 		return
 	}
 
@@ -837,7 +722,7 @@ func (m *Photo) Restore() error {
 // Delete deletes the photo from the index.
 func (m *Photo) Delete(permanently bool) (files Files, err error) {
 	if m.ID < 1 || m.PhotoUID == "" {
-		return files, fmt.Errorf("invalid photo id %d / uid %s", m.ID, txt.Quote(m.PhotoUID))
+		return files, fmt.Errorf("invalid photo id %d / uid %s", m.ID, sanitize.Log(m.PhotoUID))
 	}
 
 	if permanently {
@@ -858,7 +743,7 @@ func (m *Photo) Delete(permanently bool) (files Files, err error) {
 // DeletePermanently permanently removes a photo from the index.
 func (m *Photo) DeletePermanently() (files Files, err error) {
 	if m.ID < 1 || m.PhotoUID == "" {
-		return files, fmt.Errorf("invalid photo id %d / uid %s", m.ID, txt.Quote(m.PhotoUID))
+		return files, fmt.Errorf("invalid photo id %d / uid %s", m.ID, sanitize.Log(m.PhotoUID))
 	}
 
 	files = m.AllFiles()
@@ -903,7 +788,7 @@ func (m *Photo) Updates(values interface{}) error {
 	return UnscopedDb().Model(m).UpdateColumns(values).Error
 }
 
-// SetFavorite updates the favorite status of a photo.
+// SetFavorite updates the favorite flag of a photo.
 func (m *Photo) SetFavorite(favorite bool) error {
 	changed := m.PhotoFavorite != favorite
 	m.PhotoFavorite = favorite
@@ -927,6 +812,14 @@ func (m *Photo) SetFavorite(favorite bool) error {
 	}
 
 	return nil
+}
+
+// SetStack updates the stack flag of a photo.
+func (m *Photo) SetStack(stack int8) {
+	if m.PhotoStack != stack {
+		m.PhotoStack = stack
+		Log("photo", "update stack flag", m.Update("PhotoStack", m.PhotoStack))
+	}
 }
 
 // Approve approves a photo in review.
@@ -978,7 +871,7 @@ func (m *Photo) SetPrimary(fileUID string) error {
 		// Do nothing.
 	} else if err := Db().Model(File{}).
 		Where("photo_uid = ? AND file_type = 'jpg' AND file_missing = 0 AND file_error = ''", m.PhotoUID).
-		Order("file_width DESC").Limit(1).
+		Order("file_width DESC, file_hdr DESC").Limit(1).
 		Pluck("file_uid", &files).Error; err != nil {
 		return err
 	} else if len(files) == 0 {

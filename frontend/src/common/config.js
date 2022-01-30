@@ -1,6 +1,6 @@
 /*
 
-Copyright (c) 2018 - 2021 Michael Mayer <hello@photoprism.org>
+Copyright (c) 2018 - 2022 Michael Mayer <hello@photoprism.org>
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published
@@ -24,7 +24,7 @@ Feel free to send an e-mail to hello@photoprism.org if you have questions,
 want to support our work, or just want to say hello.
 
 Additional information can be found in our Developer Guide:
-https://docs.photoprism.org/developer-guide/
+https://docs.photoprism.app/developer-guide/
 
 */
 
@@ -123,7 +123,7 @@ export default class Config {
       console.log("config: new values", values);
     }
 
-    if (values.jsHash && this.values.jsHash !== values.jsHash) {
+    if (values.jsUri && this.values.jsUri !== values.jsUri) {
       Event.publish("dialog.reload", { values });
     }
 
@@ -216,6 +216,10 @@ export default class Config {
       case "photos":
         this.values.count.all += data.count;
         this.values.count.photos += data.count;
+        break;
+      case "live":
+        this.values.count.all += data.count;
+        this.values.count.live += data.count;
         break;
       case "videos":
         this.values.count.all += data.count;
@@ -355,5 +359,24 @@ export default class Config {
     }
 
     return [];
+  }
+
+  isSponsor() {
+    if (!this.values || !this.values.sponsor) {
+      return false;
+    }
+
+    return !this.values.demo && !this.values.test;
+  }
+
+  appIcon() {
+    switch (this.get("appIcon")) {
+      case "crisp":
+      case "mint":
+      case "bold":
+        return `${this.staticUri}/icons/${this.get("appIcon")}.svg`;
+      default:
+        return `${this.staticUri}/icons/logo.svg`;
+    }
   }
 }

@@ -8,48 +8,50 @@ import (
 
 	_ "github.com/jinzhu/gorm/dialects/mysql"
 	_ "github.com/jinzhu/gorm/dialects/sqlite"
-	"github.com/photoprism/photoprism/pkg/fs"
+
 	"github.com/urfave/cli"
 	"gopkg.in/yaml.v2"
+
+	"github.com/photoprism/photoprism/pkg/fs"
 )
 
 // Database drivers (sql dialects).
 const (
 	MySQL    = "mysql"
 	MariaDB  = "mariadb"
-	SQLite   = "sqlite3"
+	SQLite3  = "sqlite3"
 	Postgres = "postgres" // TODO: Requires GORM 2.0 for generic column data types
 )
 
 // Options provides a struct in which application configuration is stored.
 // Application code must use functions to get config options, for two reasons:
 //
-// 1. Some options are computed and we don't want to leak implementation details (aims at reducing refactoring overhead).
-//
-// 2. Paths might actually be dynamic later (if we build a multi-user version).
+// 1. We do not want to leak implementation details so refactoring overhead is kept low
+// 2. Some config values are dynamically generated
+// 3. Paths may become dynamic too at a later time
 //
 // See https://github.com/photoprism/photoprism/issues/50#issuecomment-433856358
 type Options struct {
 	Name                  string  `json:"-"`
 	Version               string  `json:"-"`
 	Copyright             string  `json:"-"`
-	Debug                 bool    `yaml:"Debug" json:"Debug" flag:"debug"`
+	PartnerID             string  `yaml:"-" json:"-" flag:"partner-id"`
+	AdminPassword         string  `yaml:"AdminPassword" json:"-" flag:"admin-password"`
 	LogLevel              string  `yaml:"LogLevel" json:"-" flag:"log-level"`
-	LogFilename           string  `yaml:"LogFilename" json:"-" flag:"log-filename"`
+	Debug                 bool    `yaml:"Debug" json:"Debug" flag:"debug"`
 	Test                  bool    `yaml:"-" json:"Test,omitempty" flag:"test"`
 	Unsafe                bool    `yaml:"-" json:"-" flag:"unsafe"`
 	Demo                  bool    `yaml:"Demo" json:"-" flag:"demo"`
 	Sponsor               bool    `yaml:"-" json:"-" flag:"sponsor"`
 	Public                bool    `yaml:"Public" json:"-" flag:"public"`
-	AdminPassword         string  `yaml:"AdminPassword" json:"-" flag:"admin-password"`
 	ReadOnly              bool    `yaml:"ReadOnly" json:"ReadOnly" flag:"read-only"`
 	Experimental          bool    `yaml:"Experimental" json:"Experimental" flag:"experimental"`
 	ConfigPath            string  `yaml:"ConfigPath" json:"-" flag:"config-path"`
 	ConfigFile            string  `json:"-"`
 	OriginalsPath         string  `yaml:"OriginalsPath" json:"-" flag:"originals-path"`
 	OriginalsLimit        int64   `yaml:"OriginalsLimit" json:"OriginalsLimit" flag:"originals-limit"`
-	ImportPath            string  `yaml:"ImportPath" json:"-" flag:"import-path"`
 	StoragePath           string  `yaml:"StoragePath" json:"-" flag:"storage-path"`
+	ImportPath            string  `yaml:"ImportPath" json:"-" flag:"import-path"`
 	CachePath             string  `yaml:"CachePath" json:"-" flag:"cache-path"`
 	SidecarPath           string  `yaml:"SidecarPath" json:"-" flag:"sidecar-path"`
 	TempPath              string  `yaml:"TempPath" json:"-" flag:"temp-path"`
@@ -74,6 +76,11 @@ type Options struct {
 	DisableClassification bool    `yaml:"DisableClassification" json:"DisableClassification" flag:"disable-classification"`
 	DetectNSFW            bool    `yaml:"DetectNSFW" json:"DetectNSFW" flag:"detect-nsfw"`
 	UploadNSFW            bool    `yaml:"UploadNSFW" json:"-" flag:"upload-nsfw"`
+	DefaultTheme          string  `yaml:"DefaultTheme" json:"DefaultTheme" flag:"default-theme"`
+	DefaultLocale         string  `yaml:"DefaultLocale" json:"DefaultLocale" flag:"default-locale"`
+	AppIcon               string  `yaml:"AppIcon" json:"AppIcon" flag:"app-icon"`
+	AppName               string  `yaml:"AppName" json:"AppName" flag:"app-name"`
+	AppMode               string  `yaml:"AppMode" json:"AppMode" flag:"app-mode"`
 	CdnUrl                string  `yaml:"CdnUrl" json:"CdnUrl" flag:"cdn-url"`
 	SiteUrl               string  `yaml:"SiteUrl" json:"SiteUrl" flag:"site-url"`
 	SiteAuthor            string  `yaml:"SiteAuthor" json:"SiteAuthor" flag:"site-author"`
@@ -81,9 +88,6 @@ type Options struct {
 	SiteCaption           string  `yaml:"SiteCaption" json:"SiteCaption" flag:"site-caption"`
 	SiteDescription       string  `yaml:"SiteDescription" json:"SiteDescription" flag:"site-description"`
 	SitePreview           string  `yaml:"SitePreview" json:"SitePreview" flag:"site-preview"`
-	AppName               string  `yaml:"AppName" json:"AppName" flag:"app-name"`
-	AppMode               string  `yaml:"AppMode" json:"AppMode" flag:"app-mode"`
-	AppIcon               string  `yaml:"AppIcon" json:"AppIcon" flag:"app-icon"`
 	DatabaseDriver        string  `yaml:"DatabaseDriver" json:"-" flag:"database-driver"`
 	DatabaseDsn           string  `yaml:"DatabaseDsn" json:"-" flag:"database-dsn"`
 	DatabaseServer        string  `yaml:"DatabaseServer" json:"-" flag:"database-server"`
@@ -126,6 +130,7 @@ type Options struct {
 	FaceClusterDist       float64 `yaml:"-" json:"-" flag:"face-cluster-dist"`
 	FaceMatchDist         float64 `yaml:"-" json:"-" flag:"face-match-dist"`
 	PIDFilename           string  `yaml:"PIDFilename" json:"-" flag:"pid-filename"`
+	LogFilename           string  `yaml:"LogFilename" json:"-" flag:"log-filename"`
 }
 
 // NewOptions creates a new configuration entity by using two methods:
@@ -249,7 +254,7 @@ func (c *Options) SetContext(ctx *cli.Context) error {
 					fieldValue.SetBool(f)
 				}
 			default:
-				log.Warnf("can't assign value of type %s from cli flag %s", t, tagValue)
+				log.Warnf("cannot assign value of type %s from cli flag %s", t, tagValue)
 			}
 		}
 	}

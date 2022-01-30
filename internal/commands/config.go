@@ -29,7 +29,6 @@ func configAction(ctx *cli.Context) error {
 	// Flags.
 	fmt.Printf("%-25s %t\n", "debug", conf.Debug())
 	fmt.Printf("%-25s %s\n", "log-level", conf.LogLevel())
-	fmt.Printf("%-25s %s\n", "log-filename", conf.LogFilename())
 	fmt.Printf("%-25s %t\n", "public", conf.Public())
 	fmt.Printf("%-25s %s\n", "admin-password", strings.Repeat("*", utf8.RuneCountInString(conf.AdminPassword())))
 	fmt.Printf("%-25s %t\n", "read-only", conf.ReadOnly())
@@ -43,8 +42,8 @@ func configAction(ctx *cli.Context) error {
 	// Paths.
 	fmt.Printf("%-25s %s\n", "originals-path", conf.OriginalsPath())
 	fmt.Printf("%-25s %d\n", "originals-limit", conf.OriginalsLimit())
-	fmt.Printf("%-25s %s\n", "import-path", conf.ImportPath())
 	fmt.Printf("%-25s %s\n", "storage-path", conf.StoragePath())
+	fmt.Printf("%-25s %s\n", "import-path", conf.ImportPath())
 	fmt.Printf("%-25s %s\n", "cache-path", conf.CachePath())
 	fmt.Printf("%-25s %s\n", "sidecar-path", conf.SidecarPath())
 	fmt.Printf("%-25s %s\n", "albums-path", conf.AlbumsPath())
@@ -84,7 +83,16 @@ func configAction(ctx *cli.Context) error {
 	fmt.Printf("%-25s %t\n", "detect-nsfw", conf.DetectNSFW())
 	fmt.Printf("%-25s %t\n", "upload-nsfw", conf.UploadNSFW())
 
-	// Site.
+	// UI Defaults.
+	fmt.Printf("%-25s %s\n", "default-locale", conf.DefaultLocale())
+
+	// Progressive Web App.
+	fmt.Printf("%-25s %s\n", "app-icon", conf.AppIcon())
+	fmt.Printf("%-25s %s\n", "app-name", conf.AppName())
+	fmt.Printf("%-25s %s\n", "app-mode", conf.AppMode())
+
+	// Site Infos.
+	fmt.Printf("%-25s %s\n", "cdn-url", conf.CdnUrl("/"))
 	fmt.Printf("%-25s %s\n", "site-url", conf.SiteUrl())
 	fmt.Printf("%-25s %s\n", "site-author", conf.SiteAuthor())
 	fmt.Printf("%-25s %s\n", "site-title", conf.SiteTitle())
@@ -92,13 +100,7 @@ func configAction(ctx *cli.Context) error {
 	fmt.Printf("%-25s %s\n", "site-description", conf.SiteDescription())
 	fmt.Printf("%-25s %s\n", "site-preview", conf.SitePreview())
 
-	// Progressive Web App.
-	fmt.Printf("%-25s %s\n", "app-name", conf.AppName())
-	fmt.Printf("%-25s %s\n", "app-mode", conf.AppMode())
-	fmt.Printf("%-25s %s\n", "app-icon", conf.AppIcon())
-
-	// URLs.
-	fmt.Printf("%-25s %s\n", "cdn-url", conf.CdnUrl("/"))
+	// URIs.
 	fmt.Printf("%-25s %s\n", "content-uri", conf.ContentUri())
 	fmt.Printf("%-25s %s\n", "static-uri", conf.StaticUri())
 	fmt.Printf("%-25s %s\n", "api-uri", conf.ApiUri())
@@ -155,8 +157,9 @@ func configAction(ctx *cli.Context) error {
 	fmt.Printf("%-25s %f\n", "face-cluster-dist", conf.FaceClusterDist())
 	fmt.Printf("%-25s %f\n", "face-match-dist", conf.FaceMatchDist())
 
-	// Other.
+	// Daemon Mode.
 	fmt.Printf("%-25s %s\n", "pid-filename", conf.PIDFilename())
+	fmt.Printf("%-25s %s\n", "log-filename", conf.LogFilename())
 
 	return nil
 }

@@ -2,6 +2,8 @@
 @import url("themes/vanta.css");
 @import url("themes/shadow.css");
 @import url("themes/yellowstone.css");
+@import url("themes/abyss.css");
+@import url("themes/gemstone.css");
 
 /* General Styles */
 
@@ -22,6 +24,16 @@ body.dark-theme {
 
 body.dark-theme #photoprism .v-tabs .v-badge__badge {
     color: #000000;
+}
+
+body.dark-theme .theme--light.v-list .v-list__tile--highlighted,
+body.dark-theme .theme--light.v-list a:hover {
+    background: rgba(255,255,255,0.3) !important;
+}
+
+.theme--light.v-list .v-list__tile--highlighted,
+.theme--light.v-list a:hover {
+    background: rgba(155,155,155,0.3) !important;
 }
 
 /* Exceptions */

@@ -188,24 +188,6 @@ func TestConfig_AdminPassword(t *testing.T) {
 	assert.Equal(t, "photoprism", result)
 }
 
-func TestConfig_AppName(t *testing.T) {
-	c := NewConfig(CliTestContext())
-
-	assert.Equal(t, "config.test", c.AppName())
-}
-
-func TestConfig_AppMode(t *testing.T) {
-	c := NewConfig(CliTestContext())
-
-	assert.Equal(t, "standalone", c.AppMode())
-}
-
-func TestConfig_AppIcon(t *testing.T) {
-	c := NewConfig(CliTestContext())
-
-	assert.Equal(t, "logo", c.AppIcon())
-}
-
 func TestConfig_NSFWModelPath(t *testing.T) {
 	c := NewConfig(CliTestContext())
 
@@ -270,13 +252,26 @@ func TestConfig_ClientConfig(t *testing.T) {
 	assert.NotEmpty(t, cc.Version)
 	assert.NotEmpty(t, cc.Copyright)
 	assert.NotEmpty(t, cc.Thumbs)
-	assert.NotEmpty(t, cc.JSHash)
-	assert.NotEmpty(t, cc.CSSHash)
-	assert.NotEmpty(t, cc.ManifestHash)
+	assert.NotEmpty(t, cc.JsUri)
+	assert.NotEmpty(t, cc.CssUri)
+	assert.NotEmpty(t, cc.ManifestUri)
 	assert.Equal(t, true, cc.Debug)
 	assert.Equal(t, false, cc.Demo)
 	assert.Equal(t, true, cc.Sponsor)
 	assert.Equal(t, false, cc.ReadOnly)
+
+	// Counts.
+	assert.NotEmpty(t, cc.Count.All)
+	assert.NotEmpty(t, cc.Count.Photos)
+	assert.LessOrEqual(t, 20, cc.Count.Photos)
+	assert.LessOrEqual(t, 1, cc.Count.Live)
+	assert.LessOrEqual(t, 4, cc.Count.Videos)
+	assert.LessOrEqual(t, cc.Count.Photos+cc.Count.Live+cc.Count.Videos, cc.Count.All)
+	assert.LessOrEqual(t, 6, cc.Count.Cameras)
+	assert.LessOrEqual(t, 1, cc.Count.Lenses)
+	assert.LessOrEqual(t, 13, cc.Count.Review)
+	assert.LessOrEqual(t, 1, cc.Count.Private)
+	assert.LessOrEqual(t, 4, cc.Count.Albums)
 }
 
 func TestConfig_Workers(t *testing.T) {
@@ -322,9 +317,9 @@ func TestConfig_BaseUri(t *testing.T) {
 	assert.Equal(t, "", c.BaseUri(""))
 	c.options.SiteUrl = "http://superhost:2342/"
 	assert.Equal(t, "", c.BaseUri(""))
-	c.options.SiteUrl = "http://foo:2342/foo/"
-	assert.Equal(t, "/foo", c.BaseUri(""))
-	assert.Equal(t, "/foo/bar", c.BaseUri("/bar"))
+	c.options.SiteUrl = "http://foo:2342/foo bar/"
+	assert.Equal(t, "/foo%20bar", c.BaseUri(""))
+	assert.Equal(t, "/foo%20bar/baz", c.BaseUri("/baz"))
 }
 
 func TestConfig_StaticUri(t *testing.T) {
@@ -378,6 +373,16 @@ func TestConfig_SiteUrl(t *testing.T) {
 	assert.Equal(t, "http://superhost:2342/", c.SiteUrl())
 	c.options.SiteUrl = "http://superhost"
 	assert.Equal(t, "http://superhost/", c.SiteUrl())
+}
+
+func TestConfig_SiteDomain(t *testing.T) {
+	c := NewConfig(CliTestContext())
+
+	assert.Equal(t, "localhost", c.SiteDomain())
+	c.options.SiteUrl = "https://foo.bar.com:2342/"
+	assert.Equal(t, "foo.bar.com", c.SiteDomain())
+	c.options.SiteUrl = ""
+	assert.Equal(t, "localhost", c.SiteDomain())
 }
 
 func TestConfig_SitePreview(t *testing.T) {

@@ -1,15 +1,23 @@
 package entity
 
+import (
+	"time"
+)
+
 // MigrateDb creates database tables and inserts default fixtures as needed.
-func MigrateDb(dropDeprecated bool) {
+func MigrateDb(dropDeprecated, runFailed bool) {
+	start := time.Now()
+
 	if dropDeprecated {
-		DeprecatedTables.Drop()
+		DeprecatedTables.Drop(Db())
 	}
 
-	Entities.Migrate()
-	Entities.WaitForMigration()
+	Entities.Migrate(Db(), runFailed)
+	Entities.WaitForMigration(Db())
 
 	CreateDefaultFixtures()
+
+	log.Debugf("entity: successfully initialized [%s]", time.Since(start))
 }
 
 // InitTestDb connects to and completely initializes the test database incl fixtures.

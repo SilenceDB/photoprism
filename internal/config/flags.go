@@ -5,14 +5,15 @@ import (
 	"github.com/urfave/cli"
 
 	"github.com/photoprism/photoprism/internal/face"
+	"github.com/photoprism/photoprism/internal/i18n"
 )
 
 // GlobalFlags describes global command-line parameters and flags.
 var GlobalFlags = []cli.Flag{
-	cli.BoolFlag{
-		Name:   "debug",
-		Usage:  "enable debug mode, show additional log messages",
-		EnvVar: "PHOTOPRISM_DEBUG",
+	cli.StringFlag{
+		Name:   "admin-password",
+		Usage:  "initial admin `PASSWORD`, minimum 4 characters",
+		EnvVar: "PHOTOPRISM_ADMIN_PASSWORD",
 	},
 	cli.StringFlag{
 		Name:   "log-level, l",
@@ -20,16 +21,10 @@ var GlobalFlags = []cli.Flag{
 		Value:  "info",
 		EnvVar: "PHOTOPRISM_LOG_LEVEL",
 	},
-	cli.StringFlag{
-		Name:   "log-filename",
-		Usage:  "optional server log `FILENAME`",
-		EnvVar: "PHOTOPRISM_LOG_FILENAME",
-		Value:  "",
-	},
-	cli.StringFlag{
-		Name:   "pid-filename",
-		Usage:  "daemon mode process id `FILENAME`",
-		EnvVar: "PHOTOPRISM_PID_FILENAME",
+	cli.BoolFlag{
+		Name:   "debug",
+		Usage:  "enable debug mode, show additional log messages",
+		EnvVar: "PHOTOPRISM_DEBUG",
 	},
 	cli.BoolFlag{
 		Name:   "test",
@@ -56,23 +51,24 @@ var GlobalFlags = []cli.Flag{
 	},
 	cli.BoolFlag{
 		Name:   "public, p",
-		Usage:  "disable password authentication",
+		Usage:  "disable password authentication, WebDAV, and the advanced settings page",
 		EnvVar: "PHOTOPRISM_PUBLIC",
-	},
-	cli.StringFlag{
-		Name:   "admin-password",
-		Usage:  "initial admin `PASSWORD`, minimum 4 characters",
-		EnvVar: "PHOTOPRISM_ADMIN_PASSWORD",
 	},
 	cli.BoolFlag{
 		Name:   "read-only, r",
-		Usage:  "disable import, upload, and delete",
+		Usage:  "disable import, upload, delete, and all other operations that require write permissions",
 		EnvVar: "PHOTOPRISM_READONLY",
 	},
 	cli.BoolFlag{
 		Name:   "experimental, e",
 		Usage:  "enable experimental features",
 		EnvVar: "PHOTOPRISM_EXPERIMENTAL",
+	},
+	cli.StringFlag{
+		Name:   "partner-id",
+		Hidden: true,
+		Usage:  "hosting partner id",
+		EnvVar: "PHOTOPRISM_PARTNER_ID",
 	},
 	cli.StringFlag{
 		Name:   "config-file, c",
@@ -86,24 +82,24 @@ var GlobalFlags = []cli.Flag{
 	},
 	cli.StringFlag{
 		Name:   "originals-path",
-		Usage:  "original media library `PATH` containing your photo and video collection",
+		Usage:  "storage `PATH` of your original media files (photos and videos)",
 		EnvVar: "PHOTOPRISM_ORIGINALS_PATH",
 	},
 	cli.IntFlag{
 		Name:   "originals-limit",
 		Value:  1000,
-		Usage:  "original media file size limit in `MB`",
+		Usage:  "file size limit in `MB`",
 		EnvVar: "PHOTOPRISM_ORIGINALS_LIMIT",
-	},
-	cli.StringFlag{
-		Name:   "import-path",
-		Usage:  "optional import `PATH` from which files can be added to originals",
-		EnvVar: "PHOTOPRISM_IMPORT_PATH",
 	},
 	cli.StringFlag{
 		Name:   "storage-path",
 		Usage:  "writable storage `PATH` for cache, database, and sidecar files",
 		EnvVar: "PHOTOPRISM_STORAGE_PATH",
+	},
+	cli.StringFlag{
+		Name:   "import-path",
+		Usage:  "optional base `PATH` from which files can be imported to originals",
+		EnvVar: "PHOTOPRISM_IMPORT_PATH",
 	},
 	cli.StringFlag{
 		Name:   "cache-path",
@@ -171,7 +167,7 @@ var GlobalFlags = []cli.Flag{
 	},
 	cli.BoolFlag{
 		Name:   "disable-backups",
-		Usage:  "disable creating YAML metadata backup files",
+		Usage:  "disable creating YAML metadata files",
 		EnvVar: "PHOTOPRISM_DISABLE_BACKUPS",
 	},
 	cli.BoolFlag{
@@ -230,6 +226,35 @@ var GlobalFlags = []cli.Flag{
 		EnvVar: "PHOTOPRISM_UPLOAD_NSFW",
 	},
 	cli.StringFlag{
+		Name:   "default-theme",
+		Usage:  "standard user interface theme `NAME`",
+		Hidden: true,
+		EnvVar: "PHOTOPRISM_DEFAULT_THEME",
+	},
+	cli.StringFlag{
+		Name:   "default-locale",
+		Usage:  "standard user interface language `CODE`",
+		Value:  i18n.Default.Locale(),
+		EnvVar: "PHOTOPRISM_DEFAULT_LOCALE",
+	},
+	cli.StringFlag{
+		Name:   "app-icon",
+		Usage:  "application `ICON` (logo, app, crisp, mint, bold)",
+		EnvVar: "PHOTOPRISM_APP_ICON",
+	},
+	cli.StringFlag{
+		Name:   "app-name",
+		Usage:  "application `NAME` when installed on a device",
+		Value:  "PhotoPrism",
+		EnvVar: "PHOTOPRISM_APP_NAME",
+	},
+	cli.StringFlag{
+		Name:   "app-mode",
+		Usage:  "application `MODE` (fullscreen, standalone, minimal-ui, browser)",
+		Value:  "standalone",
+		EnvVar: "PHOTOPRISM_APP_MODE",
+	},
+	cli.StringFlag{
 		Name:   "cdn-url",
 		Usage:  "optional content delivery network `URL`",
 		EnvVar: "PHOTOPRISM_CDN_URL",
@@ -242,7 +267,7 @@ var GlobalFlags = []cli.Flag{
 	},
 	cli.StringFlag{
 		Name:   "site-author",
-		Usage:  "site `COPYRIGHT`, artist, or owner name",
+		Usage:  "`COPYRIGHT`, artist, or owner name",
 		EnvVar: "PHOTOPRISM_SITE_AUTHOR",
 	},
 	cli.StringFlag{
@@ -266,24 +291,6 @@ var GlobalFlags = []cli.Flag{
 		Name:   "site-preview",
 		Usage:  "optional preview image `URL`",
 		EnvVar: "PHOTOPRISM_SITE_PREVIEW",
-	},
-	cli.StringFlag{
-		Name:   "app-name",
-		Usage:  "application `NAME` when installed on a device",
-		Value:  "PhotoPrism",
-		EnvVar: "PHOTOPRISM_APP_NAME",
-	},
-	cli.StringFlag{
-		Name:   "app-mode",
-		Usage:  "application `MODE` (fullscreen, standalone, minimal-ui, browser)",
-		Value:  "standalone",
-		EnvVar: "PHOTOPRISM_APP_MODE",
-	},
-	cli.StringFlag{
-		Name:   "app-icon",
-		Usage:  "application `ICON` (logo, prism, lens)",
-		Value:  "logo",
-		EnvVar: "PHOTOPRISM_APP_ICON",
 	},
 	cli.IntFlag{
 		Name:   "http-port",
@@ -319,7 +326,7 @@ var GlobalFlags = []cli.Flag{
 	},
 	cli.StringFlag{
 		Name:   "database-server",
-		Usage:  "database server `HOST` with optional port e.g. mysql:3306",
+		Usage:  "database server `HOST` with optional port e.g. mariadb:3306",
 		EnvVar: "PHOTOPRISM_DATABASE_SERVER",
 	},
 	cli.StringFlag{
@@ -356,7 +363,7 @@ var GlobalFlags = []cli.Flag{
 	},
 	cli.StringFlag{
 		Name:   "darktable-bin",
-		Usage:  "Darktable CLI `COMMAND` for RAW file conversion",
+		Usage:  "Darktable CLI `COMMAND` for RAW image conversion",
 		Value:  "darktable-cli",
 		EnvVar: "PHOTOPRISM_DARKTABLE_BIN",
 	},
@@ -368,7 +375,7 @@ var GlobalFlags = []cli.Flag{
 	},
 	cli.StringFlag{
 		Name:   "rawtherapee-bin",
-		Usage:  "RawTherapee CLI `COMMAND` for RAW file conversion",
+		Usage:  "RawTherapee CLI `COMMAND` for RAW image conversion",
 		Value:  "rawtherapee-cli",
 		EnvVar: "PHOTOPRISM_RAWTHERAPEE_BIN",
 	},
@@ -380,7 +387,7 @@ var GlobalFlags = []cli.Flag{
 	},
 	cli.StringFlag{
 		Name:   "sips-bin",
-		Usage:  "Sips `COMMAND` for RAW file conversion (macOS only)",
+		Usage:  "Sips `COMMAND` for RAW image conversion (macOS only)",
 		Value:  "sips",
 		EnvVar: "PHOTOPRISM_SIPS_BIN",
 	},
@@ -512,5 +519,16 @@ var GlobalFlags = []cli.Flag{
 		Usage:  "similarity `OFFSET` for matching faces with existing clusters",
 		Value:  face.MatchDist,
 		EnvVar: "PHOTOPRISM_FACE_MATCH_DIST",
+	},
+	cli.StringFlag{
+		Name:   "pid-filename",
+		Usage:  "process id `FILENAME` (daemon mode only)",
+		EnvVar: "PHOTOPRISM_PID_FILENAME",
+	},
+	cli.StringFlag{
+		Name:   "log-filename",
+		Usage:  "server log `FILENAME` (daemon mode only)",
+		EnvVar: "PHOTOPRISM_LOG_FILENAME",
+		Value:  "",
 	},
 }

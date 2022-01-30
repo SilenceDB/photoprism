@@ -1,5 +1,9 @@
 package entity
 
+import (
+	"time"
+)
+
 // CreateDefaultFixtures inserts default fixtures for test and production.
 func CreateDefaultFixtures() {
 	CreateUnknownAddress()
@@ -11,13 +15,17 @@ func CreateDefaultFixtures() {
 	CreateUnknownLens()
 }
 
-// ResetTestFixtures re-creates registered database tables and inserts test fixtures.
+// ResetTestFixtures recreates database tables and test fixtures.
 func ResetTestFixtures() {
-	Entities.Migrate()
-	Entities.WaitForMigration()
-	Entities.Truncate()
+	start := time.Now()
+
+	Entities.Migrate(Db(), false)
+	Entities.WaitForMigration(Db())
+	Entities.Truncate(Db())
 
 	CreateDefaultFixtures()
 
 	CreateTestFixtures()
+
+	log.Debugf("entity: recreated test fixtures [%s]", time.Since(start))
 }

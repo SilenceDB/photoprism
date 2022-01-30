@@ -17,7 +17,7 @@ GETTING STARTED
 Run this script as root to install PhotoPrism on a cloud server e.g.
 at DigitalOcean:
 
-  bash <(curl -s https://dl.photoprism.org/docker/cloud/setup.sh)
+  bash <(curl -s https://dl.photoprism.app/docker/cloud/setup.sh)
 
 This may take a while to complete, depending on the performance of
 your server and its internet connection.
@@ -59,8 +59,8 @@ We recommend hosting PhotoPrism on a server with at least 2 cores and
 should match the number of cores. Indexing large photo and video
 collections significantly benefits from fast, local SSD storage.
 
-RAW file conversion and automatic image classification using TensorFlow
-will be disabled on servers with less than 2 GB of physical memory.
+RAW image conversion and automatic image classification using TensorFlow
+will be disabled on servers with 1 GB or less memory.
 
 USING LET'S ENCRYPT HTTPS
 -------------------------------------------------------------------

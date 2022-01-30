@@ -8,6 +8,16 @@
     background: transparent;
 }
 
+#p-navigation .nav-title {
+    text-align: center;
+    -webkit-box-flex: 1!important;
+    -ms-flex-positive: 1!important;
+    flex-grow: 1!important;
+    margin-left: 10px;
+    margin-right: 10px;
+    max-height: 100%;
+}
+
 #p-navigation .nav-count {
     opacity: 0.5;
     /*position: absolute;*/
@@ -41,23 +51,6 @@
 #photoprism .theme--dark.v-sheet .text-link,
 #photoprism .theme--dark.v-card .text-link {
     color: white;
-}
-
-#noscript-info {
-    position: fixed;
-    top: 10%;
-    left: 50%;
-    transform: translateX(-50%);
-    padding: 10px;
-    background-color: rgba(255, 255, 255, 0.6);
-    margin: 0;
-    border-radius: 5px;
-}
-
-#noscript-info a {
-    text-decoration: none;
-    font-size: 13px;
-    color: #000;
 }
 
 #photoprism-info {
@@ -137,5 +130,5 @@
     margin-left: 8px;
 }
 .v-list__group__header .p-flex-menuitem .nav-count {
-    margin-right: 0px;
+    margin-right: 0;
 }

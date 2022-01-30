@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/photoprism/photoprism/pkg/rnd"
+	"github.com/photoprism/photoprism/pkg/sanitize"
 	"github.com/photoprism/photoprism/pkg/txt"
 	"github.com/tidwall/gjson"
 	"gopkg.in/photoprism/go-tz.v2/tz"
@@ -29,7 +30,7 @@ func (data *Data) Exiftool(jsonData []byte, originalName string) (err error) {
 	j := gjson.GetBytes(jsonData, "@flatten|@join")
 
 	if !j.IsObject() {
-		return fmt.Errorf("metadata: data is not an object in %s (exiftool)", txt.Quote(filepath.Base(originalName)))
+		return fmt.Errorf("metadata: data is not an object in %s (exiftool)", sanitize.Log(filepath.Base(originalName)))
 	}
 
 	jsonStrings := make(map[string]string)
@@ -40,7 +41,7 @@ func (data *Data) Exiftool(jsonData []byte, originalName string) (err error) {
 	}
 
 	if fileName, ok := jsonStrings["FileName"]; ok && fileName != "" && originalName != "" && fileName != originalName {
-		return fmt.Errorf("metadata: original name %s does not match %s (exiftool)", txt.Quote(originalName), txt.Quote(fileName))
+		return fmt.Errorf("metadata: original name %s does not match %s (exiftool)", sanitize.Log(originalName), sanitize.Log(fileName))
 	}
 
 	v := reflect.ValueOf(data).Elem()
@@ -129,7 +130,7 @@ func (data *Data) Exiftool(jsonData []byte, originalName string) (err error) {
 
 				fieldValue.SetBool(jsonValue.Bool())
 			default:
-				log.Warnf("metadata: can't assign value of type %s to %s (exiftool)", t, tagValue)
+				log.Warnf("metadata: cannot assign value of type %s to %s (exiftool)", t, tagValue)
 			}
 		}
 	}
@@ -271,8 +272,12 @@ func (data *Data) Exiftool(jsonData []byte, originalName string) (err error) {
 		data.AddKeywords(KeywordPanorama)
 	}
 
+	if data.Description != "" {
+		data.AutoAddKeywords(data.Description)
+		data.Description = SanitizeDescription(data.Description)
+	}
+
 	data.Title = SanitizeTitle(data.Title)
-	data.Description = SanitizeDescription(data.Description)
 	data.Subject = SanitizeMeta(data.Subject)
 	data.Artist = SanitizeMeta(data.Artist)
 
