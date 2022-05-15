@@ -4,91 +4,18 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/photoprism/photoprism/internal/entity"
-
-	"github.com/photoprism/photoprism/internal/i18n"
-	"github.com/photoprism/photoprism/pkg/fs"
-	"github.com/photoprism/photoprism/pkg/sanitize"
 	"gopkg.in/yaml.v2"
+
+	"github.com/photoprism/photoprism/internal/entity"
+	"github.com/photoprism/photoprism/internal/i18n"
+	"github.com/photoprism/photoprism/pkg/clean"
+	"github.com/photoprism/photoprism/pkg/fs"
 )
-
-// UISettings represents user interface settings.
-type UISettings struct {
-	Scrollbar bool   `json:"scrollbar" yaml:"Scrollbar"`
-	Zoom      bool   `json:"zoom" yaml:"Zoom"`
-	Theme     string `json:"theme" yaml:"Theme"`
-	Language  string `json:"language" yaml:"Language"`
-}
-
-// TemplateSettings represents template settings for the UI and messaging.
-type TemplateSettings struct {
-	Default string `json:"default" yaml:"Default"`
-}
-
-// MapsSettings represents maps settings (for places).
-type MapsSettings struct {
-	Animate int    `json:"animate" yaml:"Animate"`
-	Style   string `json:"style" yaml:"Style"`
-}
-
-// FeatureSettings represents feature flags, mainly for the Web UI.
-type FeatureSettings struct {
-	Upload    bool `json:"upload" yaml:"Upload"`
-	Download  bool `json:"download" yaml:"Download"`
-	Private   bool `json:"private" yaml:"Private"`
-	Review    bool `json:"review" yaml:"Review"`
-	Files     bool `json:"files" yaml:"Files"`
-	Videos    bool `json:"videos" yaml:"Videos"`
-	Folders   bool `json:"folders" yaml:"Folders"`
-	Albums    bool `json:"albums" yaml:"Albums"`
-	Moments   bool `json:"moments" yaml:"Moments"`
-	Estimates bool `json:"estimates" yaml:"Estimates"`
-	People    bool `json:"people" yaml:"People"`
-	Labels    bool `json:"labels" yaml:"Labels"`
-	Places    bool `json:"places" yaml:"Places"`
-	Edit      bool `json:"edit" yaml:"Edit"`
-	Archive   bool `json:"archive" yaml:"Archive"`
-	Delete    bool `json:"delete" yaml:"Delete"`
-	Share     bool `json:"share" yaml:"Share"`
-	Library   bool `json:"library" yaml:"Library"`
-	Import    bool `json:"import" yaml:"Import"`
-	Logs      bool `json:"logs" yaml:"Logs"`
-}
-
-// ImportSettings represents import settings.
-type ImportSettings struct {
-	Path string `json:"path" yaml:"Path"`
-	Move bool   `json:"move" yaml:"Move"`
-}
-
-// IndexSettings represents indexing settings.
-type IndexSettings struct {
-	Path    string `json:"path" yaml:"Path"`
-	Convert bool   `json:"convert" yaml:"Convert"`
-	Rescan  bool   `json:"rescan" yaml:"Rescan"`
-}
-
-// StackSettings represents settings for files that belong to the same photo.
-type StackSettings struct {
-	UUID bool `json:"uuid" yaml:"UUID"`
-	Meta bool `json:"meta" yaml:"Meta"`
-	Name bool `json:"name" yaml:"Name"`
-}
-
-// ShareSettings represents content sharing settings.
-type ShareSettings struct {
-	Title string `json:"title" yaml:"Title"`
-}
-
-// DownloadSettings represents content download settings.
-type DownloadSettings struct {
-	Name entity.DownloadName `json:"name" yaml:"Name"`
-}
 
 // Settings represents user settings for Web UI, indexing, and import.
 type Settings struct {
 	UI        UISettings       `json:"ui" yaml:"UI"`
-	Templates TemplateSettings `json:"templates" yaml:"Templates"`
+	Search    SearchSettings   `json:"search" yaml:"Search"`
 	Maps      MapsSettings     `json:"maps" yaml:"Maps"`
 	Features  FeatureSettings  `json:"features" yaml:"Features"`
 	Import    ImportSettings   `json:"import" yaml:"Import"`
@@ -96,6 +23,7 @@ type Settings struct {
 	Stack     StackSettings    `json:"stack" yaml:"Stack"`
 	Share     ShareSettings    `json:"share" yaml:"Share"`
 	Download  DownloadSettings `json:"download" yaml:"Download"`
+	Templates TemplateSettings `json:"templates" yaml:"Templates"`
 }
 
 // NewSettings creates a new Settings instance.
@@ -107,8 +35,8 @@ func NewSettings(c *Config) *Settings {
 			Theme:     c.DefaultTheme(),
 			Language:  c.DefaultLocale(),
 		},
-		Templates: TemplateSettings{
-			Default: "index.tmpl",
+		Search: SearchSettings{
+			BatchSize: 0,
 		},
 		Maps: MapsSettings{
 			Animate: 0,
@@ -152,8 +80,9 @@ func NewSettings(c *Config) *Settings {
 		Share: ShareSettings{
 			Title: "",
 		},
-		Download: DownloadSettings{
-			Name: entity.DownloadNameDefault,
+		Download: NewDownloadSettings(),
+		Templates: TemplateSettings{
+			Default: "index.tmpl",
 		},
 	}
 }
@@ -163,17 +92,17 @@ func (s *Settings) Propagate() {
 	i18n.SetLocale(s.UI.Language)
 }
 
-// StackSequences tests if files should be stacked based on their file name prefix (sequential names).
+// StackSequences checks if files should be stacked based on their file name prefix (sequential names).
 func (s Settings) StackSequences() bool {
 	return s.Stack.Name
 }
 
-// StackUUID tests if files should be stacked based on unique image or instance id.
+// StackUUID checks if files should be stacked based on unique image or instance id.
 func (s Settings) StackUUID() bool {
 	return s.Stack.UUID
 }
 
-// StackMeta tests if files should be stacked based on their place and time metadata.
+// StackMeta checks if files should be stacked based on their place and time metadata.
 func (s Settings) StackMeta() bool {
 	return s.Stack.Meta
 }
@@ -181,7 +110,7 @@ func (s Settings) StackMeta() bool {
 // Load user settings from file.
 func (s *Settings) Load(fileName string) error {
 	if !fs.FileExists(fileName) {
-		return fmt.Errorf("settings file not found: %s", sanitize.Log(fileName))
+		return fmt.Errorf("settings file not found: %s", clean.Log(fileName))
 	}
 
 	yamlConfig, err := os.ReadFile(fileName)
@@ -218,15 +147,19 @@ func (s *Settings) Save(fileName string) error {
 
 // initSettings initializes user settings from a config file.
 func (c *Config) initSettings() {
+	if c.settings != nil {
+		return
+	}
+
 	c.settings = NewSettings(c)
-	fileName := c.SettingsFile()
+	fileName := c.SettingsYaml()
 
 	if err := c.settings.Load(fileName); err == nil {
-		log.Debugf("config: settings loaded from %s ", fileName)
+		log.Debugf("settings: loaded from %s ", fileName)
 	} else if err := c.settings.Save(fileName); err != nil {
-		log.Errorf("failed creating %s: %s", fileName, err)
+		log.Errorf("settings: could not create %s (%s)", fileName, err)
 	} else {
-		log.Debugf("config: created %s ", fileName)
+		log.Debugf("settings: saved to %s ", fileName)
 	}
 
 	i18n.SetDir(c.LocalesPath())
@@ -236,9 +169,7 @@ func (c *Config) initSettings() {
 
 // Settings returns the current user settings.
 func (c *Config) Settings() *Settings {
-	if c.settings == nil {
-		c.initSettings()
-	}
+	c.initSettings()
 
 	if c.DisablePlaces() {
 		c.settings.Features.Places = false

@@ -9,12 +9,13 @@ import (
 	"github.com/photoprism/photoprism/internal/classify"
 	"github.com/photoprism/photoprism/internal/event"
 
+	"github.com/photoprism/photoprism/pkg/clean"
 	"github.com/photoprism/photoprism/pkg/rnd"
-	"github.com/photoprism/photoprism/pkg/sanitize"
 	"github.com/photoprism/photoprism/pkg/txt"
 )
 
 var labelMutex = sync.Mutex{}
+var labelCategoriesMutex = sync.Mutex{}
 
 type Labels []Label
 
@@ -27,8 +28,8 @@ type Label struct {
 	LabelName        string     `gorm:"type:VARCHAR(160);" json:"Name" yaml:"Name"`
 	LabelPriority    int        `json:"Priority" yaml:"Priority,omitempty"`
 	LabelFavorite    bool       `json:"Favorite" yaml:"Favorite,omitempty"`
-	LabelDescription string     `gorm:"type:TEXT;" json:"Description" yaml:"Description,omitempty"`
-	LabelNotes       string     `gorm:"type:TEXT;" json:"Notes" yaml:"Notes,omitempty"`
+	LabelDescription string     `gorm:"type:VARCHAR(2048);" json:"Description" yaml:"Description,omitempty"`
+	LabelNotes       string     `gorm:"type:VARCHAR(1024);" json:"Notes" yaml:"Notes,omitempty"`
 	LabelCategories  []*Label   `gorm:"many2many:categories;association_jointable_foreignkey:category_id" json:"-" yaml:"-"`
 	PhotoCount       int        `gorm:"default:1" json:"PhotoCount" yaml:"-"`
 	Thumb            string     `gorm:"type:VARBINARY(128);index;default:''" json:"Thumb" yaml:"Thumb,omitempty"`
@@ -46,11 +47,11 @@ func (Label) TableName() string {
 
 // BeforeCreate creates a random UID if needed before inserting a new row to the database.
 func (m *Label) BeforeCreate(scope *gorm.Scope) error {
-	if rnd.IsUID(m.LabelUID, 'l') {
+	if rnd.ValidID(m.LabelUID, 'l') {
 		return nil
 	}
 
-	return scope.SetColumn("LabelUID", rnd.PPID('l'))
+	return scope.SetColumn("LabelUID", rnd.GenerateUID('l'))
 }
 
 // NewLabel returns a new label.
@@ -100,7 +101,11 @@ func (m *Label) Delete() error {
 
 // Deleted returns true if the label is deleted.
 func (m *Label) Deleted() bool {
-	return m.DeletedAt != nil
+	if m.DeletedAt == nil {
+		return false
+	}
+
+	return !m.DeletedAt.IsZero()
 }
 
 // Restore restores the label in the database.
@@ -163,7 +168,7 @@ func (m *Label) AfterCreate(scope *gorm.Scope) error {
 
 // SetName changes the label name.
 func (m *Label) SetName(name string) {
-	name = sanitize.Name(name)
+	name = clean.Name(name)
 
 	if name == "" {
 		return
@@ -196,26 +201,32 @@ func (m *Label) UpdateClassify(label classify.Label) error {
 		save = true
 	}
 
+	// Save label.
 	if save {
 		if err := db.Save(m).Error; err != nil {
 			return err
 		}
 	}
 
-	// Add categories
-	for _, category := range label.Categories {
-		sn := FirstOrCreateLabel(NewLabel(txt.Title(category), -3))
+	// Update label categories.
+	if len(label.Categories) > 0 {
+		labelCategoriesMutex.Lock()
+		defer labelCategoriesMutex.Unlock()
 
-		if sn == nil {
-			continue
-		}
+		for _, category := range label.Categories {
+			sn := FirstOrCreateLabel(NewLabel(txt.Title(category), -3))
 
-		if sn.Deleted() {
-			continue
-		}
+			if sn == nil {
+				continue
+			}
 
-		if err := db.Model(m).Association("LabelCategories").Append(sn).Error; err != nil {
-			return err
+			if sn.Deleted() {
+				continue
+			}
+
+			if err := db.Model(m).Association("LabelCategories").Append(sn).Error; err != nil {
+				log.Debugf("index: failed saving label category %s (%s)", clean.Log(category), err)
+			}
 		}
 	}
 

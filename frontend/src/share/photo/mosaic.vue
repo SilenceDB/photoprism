@@ -34,14 +34,14 @@
                  :transition="false"
                  aspect-ratio="1"
                  class="accent lighten-2 clickable"
-                 @touchstart="input.touchStart($event, index)"
-                 @touchend.prevent="onClick($event, index)"
-                 @mousedown="input.mouseDown($event, index)"
+                 @touchstart.passive="input.touchStart($event, index)"
+                 @touchend.stop.prevent="onClick($event, index)"
+                 @mousedown.stop.prevent="input.mouseDown($event, index)"
                  @click.stop.prevent="onClick($event, index)"
                  @mouseover="playLive(photo)"
                  @mouseleave="pauseLive(photo)"
           >
-            <v-layout v-if="photo.Type === 'live'" class="live-player">
+            <v-layout v-if="photo.Type === 'live' || photo.Type === 'animated'" class="live-player">
               <video :id="'live-player-' + photo.ID" :key="photo.ID" width="224" height="224" preload="none"
                      loop muted playsinline>
                 <source :src="photo.videoUrl()">
@@ -56,6 +56,7 @@
                    @click.stop.prevent="onOpen($event, index, true)">
               <v-icon color="white" class="default-hidden action-raw" :title="$gettext('RAW')">photo_camera</v-icon>
               <v-icon color="white" class="default-hidden action-live" :title="$gettext('Live')">$vuetify.icons.live_photo</v-icon>
+              <v-icon color="white" class="default-hidden action-animated" :title="$gettext('Animated')">gif</v-icon>
               <v-icon color="white" class="default-hidden action-play" :title="$gettext('Video')">play_arrow</v-icon>
               <v-icon color="white" class="default-hidden action-stack" :title="$gettext('Stack')">burst_mode</v-icon>
             </v-btn>
@@ -100,11 +101,20 @@ import {Input, InputInvalid, ClickShort, ClickLong} from "common/input";
 export default {
   name: 'PPhotoMosaic',
   props: {
-    photos: Array,
+    photos: {
+      type: Array,
+      default: () => [],
+    },
     openPhoto: Function,
     editPhoto: Function,
-    album: Object,
-    filter: Object,
+    album: {
+      type: Object,
+      default: () => {},
+    },
+    filter: {
+      type: Object,
+      default: () => {},
+    },
     context: String,
     selectMode: Boolean,
   },

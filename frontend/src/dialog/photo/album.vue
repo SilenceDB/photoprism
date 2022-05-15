@@ -45,6 +45,9 @@
 <script>
 import Album from "model/album";
 
+// Todo: Handle cases where users have more than 10000 albums.
+const MaxResults = 10000;
+
 export default {
   name: 'PPhotoAlbumDialog',
   props: {
@@ -87,6 +90,10 @@ export default {
       this.$emit('cancel');
     },
     confirm() {
+      if (this.loading) {
+        return;
+      }
+
       if (this.album) {
         this.$emit('confirm', this.album);
       } else if (this.newAlbum) {
@@ -95,6 +102,8 @@ export default {
         this.newAlbum.save().then((a) => {
           this.loading = false;
           this.$emit('confirm', a.UID);
+        }).catch(() => {
+          this.loading = false;
         });
       }
     },
@@ -107,20 +116,20 @@ export default {
 
       const params = {
         q: q,
-        count: 1000,
+        count: MaxResults,
         offset: 0,
         type: "album"
       };
 
       Album.search(params).then(response => {
-        this.loading = false;
         this.albums = response.models;
         this.items = [...this.albums];
         this.$nextTick(() => this.$refs.input.focus());
       }).catch(() => {
-        this.loading = false;
         this.$nextTick(() => this.$refs.input.focus());
-      });
+      }).finally(() => {
+        this.loading = false;
+      })
     },
   },
 };

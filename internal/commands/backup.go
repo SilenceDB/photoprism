@@ -16,8 +16,8 @@ import (
 	"github.com/photoprism/photoprism/internal/config"
 	"github.com/photoprism/photoprism/internal/photoprism"
 	"github.com/photoprism/photoprism/internal/service"
+	"github.com/photoprism/photoprism/pkg/clean"
 	"github.com/photoprism/photoprism/pkg/fs"
-	"github.com/photoprism/photoprism/pkg/sanitize"
 )
 
 const backupDescription = "A user-defined SQL dump FILENAME or - for stdout can be passed as the first argument. " +
@@ -30,7 +30,7 @@ var BackupCommand = cli.Command{
 	Name:        "backup",
 	Description: backupDescription,
 	Usage:       "Creates an index SQL dump and optionally album YAML files organized by type",
-	ArgsUsage:   "[FILENAME | -]",
+	ArgsUsage:   "[filename.sql | -]",
 	Flags:       backupFlags,
 	Action:      backupAction,
 }
@@ -113,7 +113,7 @@ func backupAction(ctx *cli.Context) error {
 				}
 			}
 
-			log.Infof("writing SQL dump to %s", sanitize.Log(indexFileName))
+			log.Infof("writing SQL dump to %s", clean.Log(indexFileName))
 		}
 
 		var cmd *exec.Cmd
@@ -145,6 +145,9 @@ func backupAction(ctx *cli.Context) error {
 		cmd.Stdout = &out
 		cmd.Stderr = &stderr
 
+		// Log exact command for debugging in trace mode.
+		log.Trace(cmd.String())
+
 		// Run backup command.
 		if err := cmd.Run(); err != nil {
 			if stderr.String() != "" {
@@ -175,7 +178,7 @@ func backupAction(ctx *cli.Context) error {
 			albumsPath = conf.AlbumsPath()
 		}
 
-		log.Infof("saving albums in %s", sanitize.Log(albumsPath))
+		log.Infof("saving albums in %s", clean.Log(albumsPath))
 
 		if count, err := photoprism.BackupAlbums(albumsPath, true); err != nil {
 			return err

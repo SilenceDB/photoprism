@@ -10,15 +10,21 @@ import (
 
 	"github.com/photoprism/photoprism/internal/config"
 	"github.com/photoprism/photoprism/internal/service"
-	"github.com/photoprism/photoprism/pkg/sanitize"
+	"github.com/photoprism/photoprism/pkg/clean"
 )
 
 // ConvertCommand registers the convert cli command.
 var ConvertCommand = cli.Command{
 	Name:      "convert",
-	Usage:     "Converts files in other formats to JPEG and AVC",
-	ArgsUsage: "[ORIGINALS SUB-FOLDER]",
-	Action:    convertAction,
+	Usage:     "Converts files in other formats to JPEG and AVC as needed",
+	ArgsUsage: "[originals folder]",
+	Flags: []cli.Flag{
+		cli.BoolFlag{
+			Name:  "force, f",
+			Usage: "replace existing JPEG files in the sidecar folder",
+		},
+	},
+	Action: convertAction,
 }
 
 // convertAction converts originals in other formats to JPEG and AVC sidecar files.
@@ -48,11 +54,12 @@ func convertAction(ctx *cli.Context) error {
 		convertPath = filepath.Join(convertPath, subPath)
 	}
 
-	log.Infof("converting originals in %s", sanitize.Log(convertPath))
+	log.Infof("converting originals in %s", clean.Log(convertPath))
 
 	w := service.Convert()
 
-	if err := w.Start(convertPath); err != nil {
+	// Start file conversion.
+	if err := w.Start(convertPath, ctx.Bool("force")); err != nil {
 		log.Error(err)
 	}
 

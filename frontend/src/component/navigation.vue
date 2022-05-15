@@ -1,28 +1,32 @@
 <template>
   <div id="p-navigation">
-    <template v-if="$vuetify.breakpoint.smAndDown || !auth">
-      <v-toolbar dark fixed flat scroll-off-screen :dense="$vuetify.breakpoint.smAndDown"  color="navigation darken-1" class="nav-small"
+    <template v-if="visible && $vuetify.breakpoint.smAndDown">
+      <v-toolbar dark fixed flat scroll-off-screen dense color="navigation darken-1" class="nav-small"
                   @click.stop="showNavigation()">
-        <v-toolbar-side-icon v-if="auth" class="nav-show"></v-toolbar-side-icon>
-
+        <v-avatar tile :size="28" :class="{'clickable': auth}">
+          <img :src="$config.appIcon()" :alt="config.name">
+        </v-avatar>
         <v-toolbar-title class="nav-title">
-          <v-avatar v-if="$route.meta.icon" tile :size="28">
-            <img :src="$config.staticUri + '/img/logo-white.svg'" :alt="config.name">
-          </v-avatar>
-          <template v-else>{{ page.title }}</template>
+          {{ page.title }}
         </v-toolbar-title>
-
         <v-btn v-if="auth && !config.readonly && $config.feature('upload')" icon class="action-upload"
                :title="$gettext('Upload')" @click.stop="openUpload()">
           <v-icon>cloud_upload</v-icon>
         </v-btn>
-
       </v-toolbar>
-      <v-toolbar dark flat :dense="$vuetify.breakpoint.smAndDown" color="#fafafa">
+    </template>
+    <template v-else-if="visible && !auth">
+      <v-toolbar dark flat scroll-off-screen dense color="navigation darken-1" class="nav-small">
+        <v-avatar tile :size="28">
+          <img :src="$config.appIcon()" :alt="config.name">
+        </v-avatar>
+        <v-toolbar-title class="nav-title">
+          {{ page.title }}
+        </v-toolbar-title>
       </v-toolbar>
     </template>
     <v-navigation-drawer
-        v-if="auth"
+        v-if="visible && auth"
         v-model="drawer"
         :mini-variant="isMini"
         :width="270"
@@ -40,7 +44,7 @@
             </v-list-tile-avatar>
             <v-list-tile-content>
               <v-list-tile-title class="title">
-                PhotoPrism
+                {{ config.name }}<sup v-if="isSponsor">+</sup>
               </v-list-tile-title>
             </v-list-tile-content>
             <v-list-tile-action class="hidden-sm-and-down" :title="$gettext('Minimize')">
@@ -93,7 +97,7 @@
             </v-list-tile-content>
           </v-list-tile>
 
-          <v-list-tile :to="{name: 'browse', query: { q: 'panorama:true' }}" :exact="true" class="nav-panoramas"
+          <v-list-tile :to="{name: 'browse', query: { q: 'panoramas' }}" :exact="true" class="nav-panoramas"
                        @click.stop="">
             <v-list-tile-content>
               <v-list-tile-title :class="`menu-item ${rtl ? '--rtl' : ''}`">
@@ -102,7 +106,16 @@
             </v-list-tile-content>
           </v-list-tile>
 
-          <v-list-tile :to="{name: 'photos', query: { q: 'stack:true' }}" :exact="true" class="nav-stacks" @click.stop="">
+          <v-list-tile :to="{name: 'browse', query: { q: 'gifs' }}" :exact="true" class="nav-animated"
+                       @click.stop="">
+            <v-list-tile-content>
+              <v-list-tile-title :class="`menu-item ${rtl ? '--rtl' : ''}`">
+                <translate>Animated</translate>
+              </v-list-tile-title>
+            </v-list-tile-content>
+          </v-list-tile>
+
+          <v-list-tile :to="{name: 'photos', query: { q: 'stacks' }}" :exact="true" class="nav-stacks" @click.stop="">
             <v-list-tile-content>
               <v-list-tile-title :class="`p-flex-menuitem menu-item ${rtl ? '--rtl' : ''}`">
                 <translate>Stacks</translate>
@@ -110,7 +123,7 @@
             </v-list-tile-content>
           </v-list-tile>
 
-          <v-list-tile :to="{name: 'photos', query: { q: 'scan:true' }}" :exact="true" class="nav-scans" @click.stop="">
+          <v-list-tile :to="{name: 'photos', query: { q: 'scans' }}" :exact="true" class="nav-scans" @click.stop="">
             <v-list-tile-content>
               <v-list-tile-title :class="`p-flex-menuitem menu-item ${rtl ? '--rtl' : ''}`">
                 <translate>Scans</translate>
@@ -419,7 +432,7 @@
               </v-list-tile-content>
             </v-list-tile>
 
-            <v-list-tile v-show="!isPublic && auth" :to="{ name: 'feedback' }" :exact="true" class="nav-feedback"
+            <v-list-tile v-show="!isPublic" :to="{ name: 'feedback' }" :exact="true" class="nav-feedback"
                          @click.stop="">
               <v-list-tile-content>
                 <v-list-tile-title :class="`menu-item ${rtl ? '--rtl' : ''}`">
@@ -438,7 +451,7 @@
           </v-list-group>
         </template>
 
-        <v-list-tile v-show="!auth" to="/login" class="nav-login" @click.stop="">
+        <v-list-tile v-show="!auth" :to="{ name: 'login' }" class="nav-login" @click.stop="">
           <v-list-tile-action :title="$gettext('Login')">
             <v-icon>lock</v-icon>
           </v-list-tile-action>
@@ -466,7 +479,7 @@
           </v-list-tile-content>
         </v-list-tile>
 
-        <v-list-tile v-show="!isPublic && auth"  to="/settings/account" class="p-profile">
+        <v-list-tile v-show="auth && !isPublic" to="/settings/account" class="p-profile">
           <v-list-tile-avatar color="grey" size="36">
             <span class="white--text headline">{{ displayName.length >= 1 ? displayName[0].toUpperCase() : "E" }}</span>
           </v-list-tile-avatar>
@@ -479,13 +492,13 @@
           </v-list-tile-content>
 
           <v-list-tile-action :title="$gettext('Logout')">
-            <v-btn icon @click="logout">
+            <v-btn icon @click.stop.prevent="logout">
               <v-icon>power_settings_new</v-icon>
             </v-btn>
           </v-list-tile-action>
         </v-list-tile>
 
-        <v-list-tile v-show="!isPublic && auth && isMini" class="nav-logout" @click="logout">
+        <v-list-tile v-show="isMini && auth && !isPublic" class="nav-logout" @click.stop.prevent="logout">
           <v-list-tile-action :title="$gettext('Logout')">
             <v-icon>power_settings_new</v-icon>
           </v-list-tile-action>
@@ -499,7 +512,11 @@
       </v-list>
 
     </v-navigation-drawer>
-    <div v-if="isTest" id="photoprism-info"><a href="https://photoprism.app/" target="_blank">Browse Your Life in Pictures</a></div>
+
+    <div v-if="config.imprint && visible" id="imprint">
+      <a v-if="config.imprintUrl" :href="config.imprintUrl" target="_blank">{{ config.imprint }}</a>
+      <span v-else>{{ config.imprint }}</span>
+    </div>
     <p-reload-dialog :show="reload.dialog" @close="reload.dialog = false"></p-reload-dialog>
     <p-upload-dialog :show="upload.dialog" @cancel="upload.dialog = false"
                      @confirm="upload.dialog = false"></p-upload-dialog>
@@ -514,13 +531,29 @@ import Event from "pubsub-js";
 
 export default {
   name: "PNavigation",
+  filters: {
+    abbreviateCount: (val) => {
+      const value = Number.parseInt(val);
+      // TODO: make abbreviation configurable by userprofile settings or env var before enabling it.
+      // if (value >= 1000) {
+      //   const digits = value % 1000 <= 50 ? 0 : 1;
+      //   return (value/1000).toFixed(digits).toString()+'k';
+      // }
+      return value;
+    }
+  },
   data() {
+    const name = this.$config.get("name");
+    const isSponsor = name === "PhotoPrism" && this.$config.isSponsor();
+
     return {
+      name: this.$config.get("name"),
       drawer: null,
       isMini: localStorage.getItem('last_navigation_mode') !== 'false',
       isPublic: this.$config.get("public"),
       isTest: this.$config.test,
       isReadOnly: this.$config.get("readonly"),
+      isSponsor: isSponsor,
       session: this.$session,
       config: this.$config.values,
       page: this.$config.page,
@@ -546,6 +579,9 @@ export default {
     auth() {
       return this.session.auth || this.isPublic;
     },
+    visible() {
+      return !this.$route.meta.hideNav;
+    },
     displayName() {
       const user = this.$session.getUser();
       return user.FullName ? user.FullName : user.UserName;
@@ -553,7 +589,7 @@ export default {
     accountInfo() {
       const user = this.$session.getUser();
       return user.PrimaryEmail ? user.PrimaryEmail : this.$gettext("Account");
-    }
+    },
   },
   created() {
     this.reload.subscription = Event.subscribe("dialog.reload", () => this.reload.dialog = true);
@@ -561,10 +597,10 @@ export default {
 
     this.edit.subscription = Event.subscribe("dialog.edit", (ev, data) => {
       if (!this.edit.dialog) {
+        this.edit.dialog = true;
         this.edit.index = data.index;
         this.edit.selection = data.selection;
         this.edit.album = data.album;
-        this.edit.dialog = true;
       }
     });
   },
@@ -604,17 +640,6 @@ export default {
     logout() {
       this.$session.logout();
     },
-  },
-  filters: {
-    abbreviateCount: (val) => {
-      const value = Number.parseInt(val);
-      // TODO: make abbreviation configurable by userprofile settings or env var before enabling it.
-      // if (value >= 1000) {
-      //   const digits = value % 1000 <= 50 ? 0 : 1;
-      //   return (value/1000).toFixed(digits).toString()+'k';
-      // }
-      return value;
-    }
   },
 };
 </script>

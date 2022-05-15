@@ -8,11 +8,12 @@ import (
 	"time"
 
 	"github.com/jinzhu/gorm"
-	"github.com/photoprism/photoprism/internal/form"
-	"github.com/photoprism/photoprism/pkg/rnd"
-	"github.com/photoprism/photoprism/pkg/sanitize"
-	"github.com/photoprism/photoprism/pkg/txt"
 	"github.com/ulule/deepcopier"
+
+	"github.com/photoprism/photoprism/internal/form"
+	"github.com/photoprism/photoprism/pkg/clean"
+	"github.com/photoprism/photoprism/pkg/rnd"
+	"github.com/photoprism/photoprism/pkg/txt"
 )
 
 var folderMutex = sync.Mutex{}
@@ -27,7 +28,7 @@ type Folder struct {
 	FolderType        string     `gorm:"type:VARBINARY(16);" json:"Type" yaml:"Type,omitempty"`
 	FolderTitle       string     `gorm:"type:VARCHAR(200);" json:"Title" yaml:"Title,omitempty"`
 	FolderCategory    string     `gorm:"type:VARCHAR(100);index;" json:"Category" yaml:"Category,omitempty"`
-	FolderDescription string     `gorm:"type:TEXT;" json:"Description,omitempty" yaml:"Description,omitempty"`
+	FolderDescription string     `gorm:"type:VARCHAR(2048);" json:"Description,omitempty" yaml:"Description,omitempty"`
 	FolderOrder       string     `gorm:"type:VARBINARY(32);" json:"Order" yaml:"Order,omitempty"`
 	FolderCountry     string     `gorm:"type:VARBINARY(2);index:idx_folders_country_year_month;default:'zz'" json:"Country" yaml:"Country,omitempty"`
 	FolderYear        int        `gorm:"index:idx_folders_country_year_month;" json:"Year" yaml:"Year,omitempty"`
@@ -44,13 +45,18 @@ type Folder struct {
 	DeletedAt         *time.Time `sql:"index" json:"-"`
 }
 
+// TableName returns the entity database table name.
+func (Folder) TableName() string {
+	return "folders"
+}
+
 // BeforeCreate creates a random UID if needed before inserting a new row to the database.
 func (m *Folder) BeforeCreate(scope *gorm.Scope) error {
-	if rnd.IsUID(m.FolderUID, 'd') {
+	if rnd.ValidID(m.FolderUID, 'd') {
 		return nil
 	}
 
-	return scope.SetColumn("FolderUID", rnd.PPID('d'))
+	return scope.SetColumn("FolderUID", rnd.GenerateUID('d'))
 }
 
 // NewFolder creates a new file system directory entity.
@@ -72,10 +78,10 @@ func NewFolder(root, pathName string, modTime time.Time) Folder {
 	}
 
 	result := Folder{
-		FolderUID:     rnd.PPID('d'),
+		FolderUID:     rnd.GenerateUID('d'),
 		Root:          root,
 		Path:          pathName,
-		FolderType:    TypeDefault,
+		FolderType:    MediaUnknown,
 		FolderOrder:   SortOrderName,
 		FolderCountry: UnknownCountry.ID,
 		FolderYear:    year,
@@ -114,7 +120,7 @@ func (m *Folder) SetValuesFromPath() {
 	}
 
 	if len(m.Path) >= 6 {
-		if date := txt.Time(m.Path); !date.IsZero() {
+		if date := txt.DateFromFilePath(m.Path); !date.IsZero() {
 			if txt.IsUInt(s) || txt.IsTime(s) {
 				if date.Day() > 1 {
 					m.FolderTitle = date.Format("January 2, 2006")
@@ -180,7 +186,7 @@ func (m *Folder) Create() error {
 		if err := a.Create(); err != nil {
 			log.Errorf("folder: %s (add album)", err)
 		} else {
-			log.Infof("folder: added album %s (%s)", sanitize.Log(a.AlbumTitle), a.AlbumFilter)
+			log.Infof("folder: added album %s (%s)", clean.Log(a.AlbumTitle), a.AlbumFilter)
 		}
 	}
 

@@ -1,31 +1,33 @@
 <template>
   <div v-infinite-scroll="loadMore" class="p-page p-page-labels" style="user-select: none"
-       :infinite-scroll-disabled="scrollDisabled" :infinite-scroll-distance="1200"
+       :infinite-scroll-disabled="scrollDisabled" :infinite-scroll-distance="scrollDistance"
        :infinite-scroll-listen-for-event="'scrollRefresh'">
 
-    <v-form ref="form" class="p-labels-search" lazy-validation dense @submit.prevent="updateQuery">
+    <v-form ref="form" class="p-labels-search" lazy-validation dense @submit.stop.prevent="updateQuery()">
       <v-toolbar flat :dense="$vuetify.breakpoint.smAndDown" class="page-toolbar" color="secondary">
-        <v-text-field id="search"
-                      v-model="filter.q"
-                      class="input-search  background-inherit elevation-0"
-                      solo hide-details clearable overflow
+        <v-text-field :value="filter.q"
+                      solo hide-details clearable overflow single-line validate-on-blur
+                      class="input-search background-inherit elevation-0"
                       :label="$gettext('Search')"
                       prepend-inner-icon="search"
                       browser-autocomplete="off"
+                      autocorrect="off"
+                      autocapitalize="none"
                       color="secondary-dark"
-                      @click:clear="clearQuery"
-                      @keyup.enter.native="updateQuery"
+                      @change="(v) => {updateFilter({'q': v})}"
+                      @keyup.enter.native="(e) => updateQuery({'q': e.target.value})"
+                      @click:clear="() => {updateQuery({'q': ''})}"
         ></v-text-field>
 
-        <v-btn icon class="action-reload" :title="$gettext('Reload')" @click.stop="refresh">
+        <v-btn icon class="action-reload" :title="$gettext('Reload')" @click.stop="refresh()">
           <v-icon>refresh</v-icon>
         </v-btn>
 
-        <v-btn v-if="!filter.all" icon class="action-show-all" :title="$gettext('Show more')" @click.stop="showAll">
-          <v-icon>visibility</v-icon>
+        <v-btn v-if="!filter.all" icon class="action-show-all" :title="$gettext('Show more')" @click.stop="showAll()">
+          <v-icon>unfold_more</v-icon>
         </v-btn>
-        <v-btn v-else icon class="action-show-important" :title="$gettext('Show less')" @click.stop="showImportant">
-          <v-icon>visibility_off</v-icon>
+        <v-btn v-else icon class="action-show-important" :title="$gettext('Show less')" @click.stop="showImportant()">
+          <v-icon>unfold_less</v-icon>
         </v-btn>
       </v-toolbar>
     </v-form>
@@ -74,9 +76,9 @@
                   aspect-ratio="1"
                   style="user-select: none"
                   class="accent lighten-2 clickable"
-                  @touchstart="input.touchStart($event, index)"
-                  @touchend.prevent="onClick($event, index)"
-                  @mousedown="input.mouseDown($event, index)"
+                  @touchstart.passive="input.touchStart($event, index)"
+                  @touchend.stop.prevent="onClick($event, index)"
+                  @mousedown.stop.prevent="input.mouseDown($event, index)"
                   @click.stop.prevent="onClick($event, index)"
               >
                 <v-btn :ripple="false"
@@ -165,8 +167,6 @@ export default {
     const routeName = this.$route.name;
     const q = query['q'] ? query['q'] : '';
     const all = query['all'] ? query['all'] : '';
-    const filter = {q: q, all: all};
-    const settings = {};
 
     return {
       view: 'all',
@@ -176,13 +176,14 @@ export default {
       dirty: false,
       results: [],
       scrollDisabled: true,
+      scrollDistance: window.innerHeight*2,
       loading: true,
       batchSize: Label.batchSize(),
       offset: 0,
       page: 0,
       selection: [],
-      settings: settings,
-      filter: filter,
+      settings: {},
+      filter: {q, all},
       lastFilter: {},
       routeName: routeName,
       titleRule: v => v.length <= this.$config.get('clip') || this.$gettext("Name too long"),
@@ -194,12 +195,13 @@ export default {
     '$route'() {
       const query = this.$route.query;
 
+      this.routeName = this.$route.name;
+      this.lastFilter = {};
       this.filter.q = query['q'] ? query['q'] : '';
       this.filter.all = query['all'] ? query['all'] : '';
-      this.lastFilter = {};
-      this.routeName = this.$route.name;
+
       this.search();
-    }
+    },
   },
   created() {
     this.search();
@@ -320,10 +322,6 @@ export default {
       this.filter.all = "";
       this.updateQuery();
     },
-    clearQuery() {
-      this.filter.q = '';
-      this.updateQuery();
-    },
     addSelection(uid) {
       const pos = this.selection.indexOf(uid);
 
@@ -366,7 +364,7 @@ export default {
       this.lastId = "";
     },
     loadMore() {
-      if (this.scrollDisabled) return;
+      if (this.scrollDisabled || this.$scrollbar.disabled()) return;
 
       this.scrollDisabled = true;
       this.listen = false;
@@ -385,8 +383,12 @@ export default {
         Object.assign(params, this.staticFilter);
       }
 
+      if (offset === 0) {
+        this.results = [];
+      }
+
       Label.search(params).then(resp => {
-        this.results = this.dirty ? resp.models : this.results.concat(resp.models);
+        this.results = (offset === 0) ? resp.models : this.results.concat(resp.models);
 
         this.scrollDisabled = (resp.count < resp.limit);
 
@@ -413,8 +415,46 @@ export default {
         this.listen = true;
       });
     },
-    updateQuery() {
-      this.filter.q = this.filter.q.trim();
+    updateSettings(props) {
+      if (!props || typeof props !== "object" || props.target) {
+        return;
+      }
+
+      for (const [key, value] of Object.entries(props)) {
+        if (!this.settings.hasOwnProperty(key)) {
+          continue;
+        }
+        switch (typeof value) {
+          case "string":
+            this.settings[key] = value.trim();
+            break;
+          default:
+            this.settings[key] = value;
+        }
+      }
+    },
+    updateFilter(props) {
+      if (!props || typeof props !== "object" || props.target) {
+        return;
+      }
+
+      for (const [key, value] of Object.entries(props)) {
+        if (!this.filter.hasOwnProperty(key)) {
+          continue;
+        }
+        switch (typeof value) {
+          case "string":
+            this.filter[key] = value.trim();
+            break;
+          default:
+            this.filter[key] = value;
+        }
+      }
+    },
+    updateQuery(props) {
+      this.updateFilter(props);
+
+      if (this.loading) return;
 
       const query = {
         view: this.settings.view
@@ -448,12 +488,16 @@ export default {
 
       return params;
     },
-    refresh() {
+    refresh(props) {
+      this.updateSettings(props);
+
       if (this.loading) return;
+
       this.loading = true;
       this.page = 0;
       this.dirty = true;
       this.scrollDisabled = false;
+
       this.loadMore();
     },
     search() {

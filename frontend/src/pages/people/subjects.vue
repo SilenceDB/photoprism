@@ -1,33 +1,34 @@
 <template>
   <div v-infinite-scroll="loadMore" class="p-page p-page-subjects" style="user-select: none"
-       :infinite-scroll-disabled="scrollDisabled" :infinite-scroll-distance="1200"
+       :infinite-scroll-disabled="scrollDisabled" :infinite-scroll-distance="scrollDistance"
        :infinite-scroll-listen-for-event="'scrollRefresh'">
 
-    <v-form ref="form" class="p-people-search" lazy-validation dense @submit.prevent="updateQuery">
+    <v-form ref="form" class="p-people-search" lazy-validation dense @submit.prevent="updateQuery()">
       <v-toolbar dense flat class="page-toolbar" color="secondary-light pa-0">
-        <v-text-field id="search"
-                      v-model="filter.q"
+        <v-text-field :value="filter.q"
+                      solo hide-details clearable overflow single-line validate-on-blur
                       class="input-search background-inherit elevation-0"
-                      solo hide-details
                       :label="$gettext('Search')"
                       prepend-inner-icon="search"
                       browser-autocomplete="off"
-                      clearable overflow
+                      autocorrect="off"
+                      autocapitalize="none"
                       color="secondary-dark"
-                      @click:clear="clearQuery"
-                      @keyup.enter.native="updateQuery"
+                      @change="(v) => {updateFilter({'q': v})}"
+                      @keyup.enter.native="(e) => updateQuery({'q': e.target.value})"
+                      @click:clear="() => {updateQuery({'q': ''})}"
         ></v-text-field>
 
         <v-divider vertical></v-divider>
 
-        <v-btn icon overflow flat depressed color="secondary-dark" class="action-reload" :title="$gettext('Reload')" @click.stop="refresh">
+        <v-btn icon overflow flat depressed color="secondary-dark" class="action-reload" :title="$gettext('Reload')" @click.stop="refresh()">
           <v-icon>refresh</v-icon>
         </v-btn>
 
-        <v-btn v-if="!filter.hidden" icon class="action-show-hidden" :title="$gettext('Show hidden')" @click.stop="onShowHidden">
+        <v-btn v-if="!filter.hidden" icon class="action-show-hidden" :title="$gettext('Show hidden')" @click.stop="onShowHidden()">
           <v-icon>visibility</v-icon>
         </v-btn>
-        <v-btn v-else icon class="action-exclude-hidden" :title="$gettext('Exclude hidden')" @click.stop="onExcludeHidden">
+        <v-btn v-else icon class="action-exclude-hidden" :title="$gettext('Exclude hidden')" @click.stop="onExcludeHidden()">
           <v-icon>visibility_off</v-icon>
         </v-btn>
       </v-toolbar>
@@ -79,9 +80,9 @@
                   aspect-ratio="1"
                   style="user-select: none"
                   class="accent lighten-2 clickable"
-                  @touchstart="input.touchStart($event, index)"
-                  @touchend.prevent="onClick($event, index)"
-                  @mousedown="input.mouseDown($event, index)"
+                  @touchstart.passive="input.touchStart($event, index)"
+                  @touchend.stop.prevent="onClick($event, index)"
+                  @mousedown.stop.prevent="input.mouseDown($event, index)"
                   @click.stop.prevent="onClick($event, index)"
               >
                 <v-btn :ripple="false" :depressed="false" class="input-hidden"
@@ -180,7 +181,10 @@ import {ClickLong, ClickShort, Input, InputInvalid} from "common/input";
 export default {
   name: 'PPageSubjects',
   props: {
-    staticFilter: Object,
+    staticFilter: {
+      type: Object,
+      default: () => {},
+    },
     active: Boolean,
   },
   data() {
@@ -189,8 +193,6 @@ export default {
     const q = query['q'] ? query['q'] : '';
     const hidden = query['hidden'] ? query['hidden'] : '';
     const order = this.sortOrder();
-    const filter = {q, hidden, order};
-    const settings = {};
 
     return {
       view: 'all',
@@ -200,13 +202,14 @@ export default {
       dirty: false,
       results: [],
       scrollDisabled: true,
+      scrollDistance: window.innerHeight*2,
       loading: true,
       batchSize: Subject.batchSize(),
       offset: 0,
       page: 0,
       selection: [],
-      settings: settings,
-      filter: filter,
+      settings: {},
+      filter:  {q, hidden, order},
       lastFilter: {},
       routeName: routeName,
       titleRule: v => v.length <= this.$config.get("clip") || this.$gettext("Name too long"),
@@ -237,10 +240,10 @@ export default {
 
       const query = this.$route.query;
 
+      this.routeName = this.$route.name;
       this.filter.q = query["q"] ? query["q"] : "";
       this.filter.hidden = query["hidden"] ? query["hidden"] : "";
       this.filter.order = this.sortOrder();
-      this.routeName = this.$route.name;
 
       this.search();
     }
@@ -429,10 +432,6 @@ export default {
         this.busy = false;
       });
     },
-    clearQuery() {
-      this.filter.q = '';
-      this.updateQuery();
-    },
     addSelection(uid) {
       const pos = this.selection.indexOf(uid);
 
@@ -524,8 +523,48 @@ export default {
         this.listen = true;
       });
     },
-    updateQuery() {
-      this.filter.q = this.filter.q.trim();
+    updateSettings(props) {
+      if (!props || typeof props !== "object" || props.target) {
+        return;
+      }
+
+      for (const [key, value] of Object.entries(props)) {
+        if (!this.settings.hasOwnProperty(key)) {
+          continue;
+        }
+        switch (typeof value) {
+          case "string":
+            this.settings[key] = value.trim();
+            break;
+          default:
+            this.settings[key] = value;
+        }
+      }
+    },
+    updateFilter(props) {
+      if (!props || typeof props !== "object" || props.target) {
+        return;
+      }
+
+      for (const [key, value] of Object.entries(props)) {
+        if (!this.filter.hasOwnProperty(key)) {
+          continue;
+        }
+        switch (typeof value) {
+          case "string":
+            this.filter[key] = value.trim();
+            break;
+          default:
+            this.filter[key] = value;
+        }
+      }
+    },
+    updateQuery(props) {
+      this.updateFilter(props);
+
+      if (this.loading || !this.active) {
+        return;
+      }
 
       const query = {
         view: this.settings.view
@@ -559,10 +598,10 @@ export default {
 
       return params;
     },
-    refresh() {
-      if (this.loading || !this.active) {
-        return;
-      }
+    refresh(props) {
+      this.updateSettings(props);
+
+      if (this.loading || !this.active) return;
 
       this.loading = true;
       this.page = 0;

@@ -7,15 +7,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gosimple/slug"
 	"github.com/jinzhu/gorm"
 	"github.com/ulule/deepcopier"
 
 	"github.com/photoprism/photoprism/internal/event"
 	"github.com/photoprism/photoprism/internal/form"
 	"github.com/photoprism/photoprism/internal/maps"
+	"github.com/photoprism/photoprism/pkg/clean"
 	"github.com/photoprism/photoprism/pkg/rnd"
-	"github.com/photoprism/photoprism/pkg/sanitize"
 	"github.com/photoprism/photoprism/pkg/txt"
 )
 
@@ -40,10 +39,10 @@ type Album struct {
 	AlbumTitle       string      `gorm:"type:VARCHAR(160);index;" json:"Title" yaml:"Title"`
 	AlbumLocation    string      `gorm:"type:VARCHAR(160);" json:"Location" yaml:"Location,omitempty"`
 	AlbumCategory    string      `gorm:"type:VARCHAR(100);index;" json:"Category" yaml:"Category,omitempty"`
-	AlbumCaption     string      `gorm:"type:TEXT;" json:"Caption" yaml:"Caption,omitempty"`
-	AlbumDescription string      `gorm:"type:TEXT;" json:"Description" yaml:"Description,omitempty"`
-	AlbumNotes       string      `gorm:"type:TEXT;" json:"Notes" yaml:"Notes,omitempty"`
-	AlbumFilter      string      `gorm:"type:VARBINARY(767);" json:"Filter" yaml:"Filter,omitempty"`
+	AlbumCaption     string      `gorm:"type:VARCHAR(1024);" json:"Caption" yaml:"Caption,omitempty"`
+	AlbumDescription string      `gorm:"type:VARCHAR(2048);" json:"Description" yaml:"Description,omitempty"`
+	AlbumNotes       string      `gorm:"type:VARCHAR(1024);" json:"Notes" yaml:"Notes,omitempty"`
+	AlbumFilter      string      `gorm:"type:VARBINARY(2048);" json:"Filter" yaml:"Filter,omitempty"`
 	AlbumOrder       string      `gorm:"type:VARBINARY(32);" json:"Order" yaml:"Order,omitempty"`
 	AlbumTemplate    string      `gorm:"type:VARBINARY(255);" json:"Template" yaml:"Template,omitempty"`
 	AlbumState       string      `gorm:"type:VARCHAR(100);index;" json:"State" yaml:"State,omitempty"`
@@ -73,7 +72,7 @@ func AddPhotoToAlbums(photo string, albums []string) (err error) {
 		return nil
 	}
 
-	if !rnd.IsPPID(photo, 'p') {
+	if !rnd.EntityUID(photo, 'p') {
 		return fmt.Errorf("album: invalid photo uid %s", photo)
 	}
 
@@ -85,7 +84,7 @@ func AddPhotoToAlbums(photo string, albums []string) (err error) {
 			continue
 		}
 
-		if rnd.IsPPID(album, 'a') {
+		if rnd.EntityUID(album, 'a') {
 			aUID = album
 		} else {
 			a := NewAlbum(album, AlbumDefault)
@@ -133,7 +132,7 @@ func NewAlbum(albumTitle, albumType string) *Album {
 
 // NewFolderAlbum creates a new folder album.
 func NewFolderAlbum(albumTitle, albumPath, albumFilter string) *Album {
-	albumSlug := slug.Make(albumPath)
+	albumSlug := txt.Slug(albumPath)
 
 	if albumTitle == "" || albumSlug == "" || albumPath == "" || albumFilter == "" {
 		return nil
@@ -144,13 +143,14 @@ func NewFolderAlbum(albumTitle, albumPath, albumFilter string) *Album {
 	result := &Album{
 		AlbumOrder:  SortOrderAdded,
 		AlbumType:   AlbumFolder,
-		AlbumTitle:  albumTitle,
-		AlbumSlug:   albumSlug,
-		AlbumPath:   albumPath,
+		AlbumSlug:   txt.Clip(albumSlug, txt.ClipSlug),
+		AlbumPath:   txt.Clip(albumPath, txt.ClipPath),
 		AlbumFilter: albumFilter,
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}
+
+	result.SetTitle(albumTitle)
 
 	return result
 }
@@ -166,12 +166,13 @@ func NewMomentsAlbum(albumTitle, albumSlug, albumFilter string) *Album {
 	result := &Album{
 		AlbumOrder:  SortOrderOldest,
 		AlbumType:   AlbumMoment,
-		AlbumTitle:  albumTitle,
-		AlbumSlug:   albumSlug,
+		AlbumSlug:   txt.Clip(albumSlug, txt.ClipSlug),
 		AlbumFilter: albumFilter,
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}
+
+	result.SetTitle(albumTitle)
 
 	return result
 }
@@ -190,12 +191,13 @@ func NewStateAlbum(albumTitle, albumSlug, albumFilter string) *Album {
 	result := &Album{
 		AlbumOrder:  SortOrderNewest,
 		AlbumType:   AlbumState,
-		AlbumTitle:  albumTitle,
-		AlbumSlug:   albumSlug,
+		AlbumSlug:   txt.Clip(albumSlug, txt.ClipSlug),
 		AlbumFilter: albumFilter,
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}
+
+	result.SetTitle(albumTitle)
 
 	return result
 }
@@ -220,7 +222,6 @@ func NewMonthAlbum(albumTitle, albumSlug string, year, month int) *Album {
 	result := &Album{
 		AlbumOrder:  SortOrderOldest,
 		AlbumType:   AlbumMonth,
-		AlbumTitle:  albumTitle,
 		AlbumSlug:   albumSlug,
 		AlbumFilter: f.Serialize(),
 		AlbumYear:   year,
@@ -228,6 +229,8 @@ func NewMonthAlbum(albumTitle, albumSlug string, year, month int) *Album {
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}
+
+	result.SetTitle(albumTitle)
 
 	return result
 }
@@ -244,14 +247,12 @@ func FindMonthAlbum(year, month int) *Album {
 }
 
 // FindAlbumBySlug finds a matching album or returns nil.
-func FindAlbumBySlug(albumSlug, albumType string) *Album {
+func FindAlbumBySlug(albumSlug, albumType string) (*Album, error) {
 	result := Album{}
 
-	if err := UnscopedDb().Where("album_slug = ? AND album_type = ?", albumSlug, albumType).First(&result).Error; err != nil {
-		return nil
-	}
+	err := UnscopedDb().Where("album_slug = ? AND album_type = ?", albumSlug, albumType).First(&result).Error
 
-	return &result
+	return &result, err
 }
 
 // FindAlbumByAttr finds an album by filters and slugs, or returns nil.
@@ -276,7 +277,7 @@ func FindAlbumByAttr(slugs, filters []string, albumType string) *Album {
 // FindFolderAlbum finds a matching folder album or returns nil.
 func FindFolderAlbum(albumPath string) *Album {
 	albumPath = strings.Trim(albumPath, string(os.PathSeparator))
-	albumSlug := slug.Make(albumPath)
+	albumSlug := txt.Slug(albumPath)
 
 	if albumSlug == "" {
 		return nil
@@ -295,8 +296,8 @@ func FindFolderAlbum(albumPath string) *Album {
 }
 
 // Find returns an entity from the database.
-func (m *Album) Find() error {
-	if rnd.IsPPID(m.AlbumUID, 'a') {
+func (m *Album) Find() (err error) {
+	if rnd.EntityUID(m.AlbumUID, 'a') {
 		if err := UnscopedDb().First(m, "album_uid = ?", m.AlbumUID).Error; err != nil {
 			return err
 		}
@@ -315,37 +316,35 @@ func (m *Album) Find() error {
 	if m.AlbumType != AlbumDefault && m.AlbumFilter != "" {
 		stmt = stmt.Where("album_slug = ? OR album_filter = ?", m.AlbumSlug, m.AlbumFilter)
 	} else {
-		stmt = stmt.Where("album_slug = ?", m.AlbumSlug)
+		stmt = stmt.Where("album_slug = ? OR album_title LIKE ?", m.AlbumSlug, m.AlbumTitle)
 	}
 
-	if err := stmt.First(m).Error; err != nil {
-		return err
-	}
+	err = stmt.First(m).Error
 
-	return nil
+	return err
 }
 
 // BeforeCreate creates a random UID if needed before inserting a new row to the database.
 func (m *Album) BeforeCreate(scope *gorm.Scope) error {
-	if rnd.IsUID(m.AlbumUID, 'a') {
+	if rnd.ValidID(m.AlbumUID, 'a') {
 		return nil
 	}
 
-	return scope.SetColumn("AlbumUID", rnd.PPID('a'))
+	return scope.SetColumn("AlbumUID", rnd.GenerateUID('a'))
 }
 
 // String returns the id or name as string.
 func (m *Album) String() string {
 	if m.AlbumSlug != "" {
-		return sanitize.Log(m.AlbumSlug)
+		return clean.Log(m.AlbumSlug)
 	}
 
 	if m.AlbumTitle != "" {
-		return sanitize.Log(m.AlbumTitle)
+		return clean.Log(m.AlbumTitle)
 	}
 
 	if m.AlbumUID != "" {
-		return sanitize.Log(m.AlbumUID)
+		return clean.Log(m.AlbumUID)
 	}
 
 	return "[unknown album]"
@@ -368,13 +367,15 @@ func (m *Album) IsDefault() bool {
 
 // SetTitle changes the album name.
 func (m *Album) SetTitle(title string) {
-	title = strings.TrimSpace(title)
+	title = strings.Trim(title, "_&|{}<>: \n\r\t\\")
+	title = strings.ReplaceAll(title, "\"", "'")
+	title = txt.Shorten(title, txt.ClipDefault, txt.Ellipsis)
 
 	if title == "" {
 		title = m.CreatedAt.Format("January 2006")
 	}
 
-	m.AlbumTitle = txt.Clip(title, txt.ClipDefault)
+	m.AlbumTitle = title
 
 	if m.AlbumType == AlbumDefault || m.AlbumSlug == "" {
 		if len(m.AlbumTitle) < txt.ClipSlug {
@@ -391,8 +392,8 @@ func (m *Album) SetTitle(title string) {
 
 // UpdateSlug updates title and slug of generated albums if needed.
 func (m *Album) UpdateSlug(title, slug string) error {
-	title = strings.TrimSpace(title)
-	slug = strings.TrimSpace(slug)
+	title = txt.Clip(title, txt.ClipDefault)
+	slug = txt.Clip(slug, txt.ClipSlug)
 
 	if title == "" || slug == "" {
 		return nil
@@ -409,13 +410,18 @@ func (m *Album) UpdateSlug(title, slug string) error {
 		return nil
 	}
 
-	m.AlbumTitle = title
+	if title != "" {
+		m.SetTitle(title)
+	}
 
 	return m.Updates(Values{"album_title": m.AlbumTitle, "album_slug": m.AlbumSlug})
 }
 
 // UpdateState updates the album location.
 func (m *Album) UpdateState(title, slug, stateName, countryCode string) error {
+	title = txt.Clip(title, txt.ClipDefault)
+	slug = txt.Clip(slug, txt.ClipSlug)
+
 	if title == "" || slug == "" || stateName == "" || countryCode == "" {
 		return nil
 	}
@@ -447,7 +453,9 @@ func (m *Album) UpdateState(title, slug, stateName, countryCode string) error {
 		return nil
 	}
 
-	m.AlbumTitle = title
+	if title != "" {
+		m.SetTitle(title)
+	}
 
 	return m.Updates(Values{"album_title": m.AlbumTitle, "album_slug": m.AlbumSlug, "album_location": m.AlbumLocation, "album_country": m.AlbumCountry, "album_state": m.AlbumState})
 }
@@ -466,23 +474,23 @@ func (m *Album) SaveForm(f form.Album) error {
 		m.SetTitle(f.AlbumTitle)
 	}
 
-	return Db().Save(m).Error
+	return m.Save()
 }
 
 // Update sets a new value for a database column.
 func (m *Album) Update(attr string, value interface{}) error {
-	return UnscopedDb().Model(m).UpdateColumn(attr, value).Error
+	return UnscopedDb().Model(m).Update(attr, value).Error
 }
 
 // Updates multiple columns in the database.
 func (m *Album) Updates(values interface{}) error {
-	return UnscopedDb().Model(m).UpdateColumns(values).Error
+	return UnscopedDb().Model(m).Updates(values).Error
 }
 
 // UpdateFolder updates the path, filter and slug for a folder album.
 func (m *Album) UpdateFolder(albumPath, albumFilter string) error {
 	albumPath = strings.Trim(albumPath, string(os.PathSeparator))
-	albumSlug := slug.Make(albumPath)
+	albumSlug := txt.Slug(albumPath)
 
 	if albumSlug == "" {
 		return nil
@@ -565,7 +573,11 @@ func (m *Album) DeletePermanently() error {
 
 // Deleted tests if the entity is deleted.
 func (m *Album) Deleted() bool {
-	return m.DeletedAt != nil
+	if m.DeletedAt == nil {
+		return false
+	}
+
+	return !m.DeletedAt.IsZero()
 }
 
 // Restore restores the entity in the database.
@@ -592,7 +604,7 @@ func (m *Album) Title() string {
 
 // ZipName returns the zip download filename.
 func (m *Album) ZipName() string {
-	s := slug.Make(m.AlbumTitle)
+	s := txt.Slug(m.AlbumTitle)
 
 	if len(s) < 2 {
 		s = fmt.Sprintf("photoprism-album-%s", m.AlbumUID)

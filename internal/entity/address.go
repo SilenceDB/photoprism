@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/photoprism/photoprism/pkg/sanitize"
+	"github.com/photoprism/photoprism/pkg/clean"
 )
 
 type Addresses []Address
@@ -22,7 +22,7 @@ type Address struct {
 	AddressCity    string     `gorm:"size:128;" json:"City" yaml:"City,omitempty"`
 	AddressState   string     `gorm:"size:128;" json:"State" yaml:"State,omitempty"`
 	AddressCountry string     `gorm:"type:VARBINARY(2);default:'zz'" json:"Country" yaml:"Country,omitempty"`
-	AddressNotes   string     `gorm:"type:TEXT;" json:"Notes" yaml:"Notes,omitempty"`
+	AddressNotes   string     `gorm:"type:VARCHAR(1024);" json:"Notes" yaml:"Notes,omitempty"`
 	CreatedAt      time.Time  `json:"CreatedAt" yaml:"-"`
 	UpdatedAt      time.Time  `json:"UpdatedAt" yaml:"-"`
 	DeletedAt      *time.Time `sql:"index" json:"DeletedAt,omitempty" yaml:"-"`
@@ -64,7 +64,7 @@ func FirstOrCreateAddress(m *Address) *Address {
 
 // String returns an identifier that can be used in logs.
 func (m *Address) String() string {
-	return sanitize.Log(fmt.Sprintf("%s, %s %s, %s", m.AddressLine1, m.AddressZip, m.AddressCity, m.AddressCountry))
+	return clean.Log(fmt.Sprintf("%s, %s %s, %s", m.AddressLine1, m.AddressZip, m.AddressCity, m.AddressCountry))
 }
 
 // Unknown returns true if the address is unknown.

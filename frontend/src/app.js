@@ -1,30 +1,25 @@
 /*
 
-Copyright (c) 2018 - 2022 Michael Mayer <hello@photoprism.app>
+Copyright (c) 2018 - 2022 PhotoPrism UG. All rights reserved.
 
     This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU Affero General Public License as published
-    by the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
+    it under Version 3 of the GNU Affero General Public License (the "AGPL"):
+    <https://docs.photoprism.app/license/agpl>
 
     This program is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU Affero General Public License for more details.
 
-    You should have received a copy of the GNU Affero General Public License
-    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+    The AGPL is supplemented by our Trademark and Brand Guidelines,
+    which describe how our Brand Assets may be used:
+    <https://photoprism.app/trademark>
 
-    PhotoPrism® is a registered trademark of Michael Mayer.  You may use it as required
-    to describe our software, run your own server, for educational purposes, but not for
-    offering commercial goods, products, or services without prior written permission.
-    In other words, please ask.
-
-Feel free to send an e-mail to hello@photoprism.app if you have questions,
+Feel free to send an email to hello@photoprism.app if you have questions,
 want to support our work, or just want to say hello.
 
 Additional information can be found in our Developer Guide:
-https://docs.photoprism.app/developer-guide/
+<https://docs.photoprism.app/developer-guide/>
 
 */
 
@@ -42,8 +37,8 @@ import GetTextPlugin from "vue-gettext";
 import Log from "common/log";
 import PhotoPrism from "app.vue";
 import Router from "vue-router";
-import Routes from "routes";
-import { config, session } from "session";
+import Routes from "app/routes";
+import { config, session } from "app/session";
 import { Settings } from "luxon";
 import Socket from "common/websocket";
 import Viewer from "common/viewer";
@@ -170,12 +165,22 @@ router.beforeEach((to, from, next) => {
 });
 
 router.afterEach((to) => {
-  if (to.meta.title && config.values.siteTitle !== to.meta.title) {
-    config.page.title = $gettext(to.meta.title);
-    window.document.title = config.values.siteTitle + ": " + config.page.title;
+  const t = to.meta["title"] ? to.meta["title"] : "";
+
+  if (t !== "" && config.values.siteTitle !== t && config.values.name !== t) {
+    config.page.title = $gettext(t);
+    if (config.page.title === "") {
+      window.document.title = config.values.siteTitle;
+    } else {
+      window.document.title = config.page.title + " – " + config.values.siteTitle;
+    }
   } else {
-    config.page.title = config.values.siteTitle;
-    window.document.title = config.values.siteTitle + ": " + config.values.siteCaption;
+    config.page.title = config.values.name;
+    if (config.values.siteCaption === "" || !config.values.sponsor) {
+      window.document.title = config.values.siteTitle;
+    } else {
+      window.document.title = config.values.siteCaption;
+    }
   }
 });
 
@@ -184,11 +189,6 @@ if (isMobile) {
 } else {
   // Pull client config every 10 minutes in case push fails (except on mobile to save battery).
   setInterval(() => config.update(), 600000);
-}
-
-// Set body class for chrome-only optimizations.
-if (navigator.appVersion.indexOf("Chrome/") !== -1) {
-  document.body.classList.add("chrome");
 }
 
 // Start application.

@@ -135,7 +135,10 @@ import {ClickLong, ClickShort, Input, InputInvalid} from "common/input";
 export default {
   name: 'PPageFaces',
   props: {
-    staticFilter: Object,
+    staticFilter: {
+      type: Object,
+      default: () => {},
+    },
     active: Boolean,
   },
   data() {
@@ -155,6 +158,7 @@ export default {
       dirty: false,
       results: [],
       scrollDisabled: true,
+      scrollDistance: window.innerHeight*2,
       loading: true,
       busy: false,
       batchSize: 999,

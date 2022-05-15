@@ -1,5 +1,5 @@
 <template>
-  <v-dialog v-model="show" fullscreen hide-overlay scrollable
+  <v-dialog :value="show" fullscreen hide-overlay scrollable
             lazy persistent class="p-photo-edit-dialog" @keydown.esc="close">
     <v-card color="application">
       <v-toolbar dark flat color="navigation" :dense="$vuetify.breakpoint.smAndDown">
@@ -109,11 +109,11 @@
 </template>
 <script>
 import Photo from "model/photo";
-import PhotoDetails from "./details.vue";
-import PhotoLabels from "./labels.vue";
-import PhotoPeople from "./people.vue";
-import PhotoFiles from "./files.vue";
-import PhotoInfo from "./info.vue";
+import PhotoDetails from "details.vue";
+import PhotoLabels from "labels.vue";
+import PhotoPeople from "people.vue";
+import PhotoFiles from "files.vue";
+import PhotoInfo from "info.vue";
 import Event from "pubsub-js";
 
 export default {
@@ -128,8 +128,14 @@ export default {
   props: {
     index: Number,
     show: Boolean,
-    selection: Array,
-    album: Object,
+    selection: {
+      type: Array,
+      default: () => [],
+    },
+    album: {
+      type: Object,
+      default: () => {},
+    },
   },
   data() {
     return {
@@ -217,7 +223,7 @@ export default {
       }
 
       if (!this.selection || !this.selection[index]) {
-        this.$notify.error("Invalid photo selected");
+        this.$notify.error(this.$gettext("Invalid photo selected"));
         return;
       }
 

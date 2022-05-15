@@ -2,31 +2,26 @@
 
 Package fs provides filesystem related constants and functions.
 
-Copyright (c) 2018 - 2022 Michael Mayer <hello@photoprism.app>
+Copyright (c) 2018 - 2022 PhotoPrism UG. All rights reserved.
 
     This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU Affero General Public License as published
-    by the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
+    it under Version 3 of the GNU Affero General Public License (the "AGPL"):
+    <https://docs.photoprism.app/license/agpl>
 
     This program is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU Affero General Public License for more details.
 
-    You should have received a copy of the GNU Affero General Public License
-    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+    The AGPL is supplemented by our Trademark and Brand Guidelines,
+    which describe how our Brand Assets may be used:
+    <https://photoprism.app/trademark>
 
-    PhotoPrism® is a registered trademark of Michael Mayer.  You may use it as required
-    to describe our software, run your own server, for educational purposes, but not for
-    offering commercial goods, products, or services without prior written permission.
-    In other words, please ask.
-
-Feel free to send an e-mail to hello@photoprism.app if you have questions,
+Feel free to send an email to hello@photoprism.app if you have questions,
 want to support our work, or just want to say hello.
 
 Additional information can be found in our Developer Guide:
-https://docs.photoprism.app/developer-guide/
+<https://docs.photoprism.app/developer-guide/>
 
 */
 package fs
@@ -63,6 +58,17 @@ func FileExists(fileName string) bool {
 	return err == nil && !info.IsDir()
 }
 
+// FileExistsNotEmpty returns true if file exists, is not a directory, and not empty.
+func FileExistsNotEmpty(fileName string) bool {
+	if fileName == "" {
+		return false
+	}
+
+	info, err := os.Stat(fileName)
+
+	return err == nil && !info.IsDir() && info.Size() > 0
+}
+
 // PathExists tests if a path exists, and is a directory or symlink.
 func PathExists(path string) bool {
 	if path == "" {
@@ -86,7 +92,7 @@ func PathWritable(path string) bool {
 		return false
 	}
 
-	tmpName := filepath.Join(path, "."+rnd.Token(8))
+	tmpName := filepath.Join(path, "."+rnd.GenerateToken(8))
 
 	if f, err := os.Create(tmpName); err != nil {
 		return false

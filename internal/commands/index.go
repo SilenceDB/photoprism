@@ -13,15 +13,15 @@ import (
 	"github.com/photoprism/photoprism/internal/config"
 	"github.com/photoprism/photoprism/internal/photoprism"
 	"github.com/photoprism/photoprism/internal/service"
+	"github.com/photoprism/photoprism/pkg/clean"
 	"github.com/photoprism/photoprism/pkg/fs"
-	"github.com/photoprism/photoprism/pkg/sanitize"
 )
 
 // IndexCommand registers the index cli command.
 var IndexCommand = cli.Command{
 	Name:      "index",
 	Usage:     "Indexes original media files",
-	ArgsUsage: "[ORIGINALS SUB-FOLDER]",
+	ArgsUsage: "[originals folder]",
 	Flags:     indexFlags,
 	Action:    indexAction,
 }
@@ -29,7 +29,11 @@ var IndexCommand = cli.Command{
 var indexFlags = []cli.Flag{
 	cli.BoolFlag{
 		Name:  "force, f",
-		Usage: "re-index all originals, including unchanged files",
+		Usage: "rescan all originals, including unchanged files",
+	},
+	cli.BoolFlag{
+		Name:  "archived, a",
+		Usage: "do not skip files belonging to archived photos",
 	},
 	cli.BoolFlag{
 		Name:  "cleanup, c",
@@ -57,9 +61,9 @@ func indexAction(ctx *cli.Context) error {
 	subPath := strings.TrimSpace(ctx.Args().First())
 
 	if subPath == "" {
-		log.Infof("indexing originals in %s", sanitize.Log(conf.OriginalsPath()))
+		log.Infof("indexing originals in %s", clean.Log(conf.OriginalsPath()))
 	} else {
-		log.Infof("indexing originals in %s", sanitize.Log(filepath.Join(conf.OriginalsPath(), subPath)))
+		log.Infof("indexing originals in %s", clean.Log(filepath.Join(conf.OriginalsPath(), subPath)))
 	}
 
 	if conf.ReadOnly() {
@@ -69,12 +73,8 @@ func indexAction(ctx *cli.Context) error {
 	var indexed fs.Done
 
 	if w := service.Index(); w != nil {
-		opt := photoprism.IndexOptions{
-			Path:    subPath,
-			Rescan:  ctx.Bool("force"),
-			Convert: conf.Settings().Index.Convert && conf.SidecarWritable(),
-			Stack:   true,
-		}
+		convert := conf.Settings().Index.Convert && conf.SidecarWritable()
+		opt := photoprism.NewIndexOptions(subPath, ctx.Bool("force"), convert, true, false, !ctx.Bool("archived"))
 
 		indexed = w.Start(opt)
 	}

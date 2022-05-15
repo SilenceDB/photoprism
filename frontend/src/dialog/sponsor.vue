@@ -1,5 +1,5 @@
 <template>
-  <v-dialog v-model="show" lazy persistent max-width="500" class="modal-dialog sponsor-dialog" @keydown.esc="close">
+  <v-dialog :value="show" lazy persistent max-width="500" class="modal-dialog sponsor-dialog" @keydown.esc="close">
     <v-card raised elevation="24">
       <v-card-title primary-title class="pb-0">
         <v-layout row wrap>
@@ -70,7 +70,7 @@ export default {
       this.$emit('close');
     },
     signUp() {
-      window.open("https://www.patreon.com/photoprism", "_blank");
+      window.open("https://link.photoprism.app/patreon", "_blank");
       this.$emit('close');
     },
   },

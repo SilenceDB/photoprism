@@ -18,8 +18,8 @@ import (
 	"github.com/photoprism/photoprism/internal/service"
 	"github.com/photoprism/photoprism/internal/workers"
 
+	"github.com/photoprism/photoprism/pkg/clean"
 	"github.com/photoprism/photoprism/pkg/fs"
-	"github.com/photoprism/photoprism/pkg/sanitize"
 )
 
 // Namespaces for caching and logs.
@@ -49,7 +49,7 @@ func GetAccount(router *gin.RouterGroup) {
 			return
 		}
 
-		id := sanitize.IdUint(c.Param("id"))
+		id := clean.IdUint(c.Param("id"))
 
 		if m, err := query.AccountByID(id); err == nil {
 			c.JSON(http.StatusOK, m)
@@ -82,7 +82,7 @@ func GetAccountFolders(router *gin.RouterGroup) {
 		}
 
 		start := time.Now()
-		id := sanitize.IdUint(c.Param("id"))
+		id := clean.IdUint(c.Param("id"))
 		cache := service.FolderCache()
 		cacheKey := fmt.Sprintf("%s:%d", accountFolder, id)
 
@@ -117,6 +117,8 @@ func GetAccountFolders(router *gin.RouterGroup) {
 	})
 }
 
+// ShareWithAccount uploads files to the selected account.
+//
 // GET /api/v1/accounts/:id/share
 //
 // Parameters:
@@ -130,7 +132,7 @@ func ShareWithAccount(router *gin.RouterGroup) {
 			return
 		}
 
-		id := sanitize.IdUint(c.Param("id"))
+		id := clean.IdUint(c.Param("id"))
 
 		m, err := query.AccountByID(id)
 
@@ -146,8 +148,11 @@ func ShareWithAccount(router *gin.RouterGroup) {
 			return
 		}
 
-		dst := f.Destination
-		files, err := query.FilesByUID(f.Photos, 1000, 0)
+		folder := f.Folder
+
+		// Find files to share.
+		selection := query.ShareSelection(m.ShareOriginals())
+		files, err := query.SelectedFiles(f.Selection, selection)
 
 		if err != nil {
 			AbortEntityNotFound(c)
@@ -157,7 +162,7 @@ func ShareWithAccount(router *gin.RouterGroup) {
 		var aliases = make(map[string]int)
 
 		for _, file := range files {
-			alias := path.Join(dst, file.ShareBase(0))
+			alias := path.Join(folder, file.ShareBase(0))
 			key := strings.ToLower(alias)
 
 			if seq := aliases[key]; seq > 0 {
@@ -175,6 +180,8 @@ func ShareWithAccount(router *gin.RouterGroup) {
 	})
 }
 
+// CreateAccount creates a new remote account configuration.
+//
 // POST /api/v1/accounts
 func CreateAccount(router *gin.RouterGroup) {
 	router.POST("/accounts", func(c *gin.Context) {
@@ -219,6 +226,8 @@ func CreateAccount(router *gin.RouterGroup) {
 	})
 }
 
+// UpdateAccount updates a remote account configuration.
+//
 // PUT /api/v1/accounts/:id
 //
 // Parameters:
@@ -239,7 +248,7 @@ func UpdateAccount(router *gin.RouterGroup) {
 			return
 		}
 
-		id := sanitize.IdUint(c.Param("id"))
+		id := clean.IdUint(c.Param("id"))
 
 		m, err := query.AccountByID(id)
 
@@ -288,6 +297,8 @@ func UpdateAccount(router *gin.RouterGroup) {
 	})
 }
 
+// DeleteAccount removes a remote account configuration.
+//
 // DELETE /api/v1/accounts/:id
 //
 // Parameters:
@@ -308,7 +319,7 @@ func DeleteAccount(router *gin.RouterGroup) {
 			return
 		}
 
-		id := sanitize.IdUint(c.Param("id"))
+		id := clean.IdUint(c.Param("id"))
 
 		m, err := query.AccountByID(id)
 

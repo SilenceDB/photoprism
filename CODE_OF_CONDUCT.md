@@ -1,30 +1,37 @@
-# Code of Conduct
+# PhotoPrism® Code of Conduct
 
-## Rules ##
+**By using the software and services we provide, you agree to our [Terms of Service](https://photoprism.app/terms), including our [Privacy Policy](https://photoprism.app/privacy) and the following Code of Conduct. It explains the "dos and don’ts" when interacting with other community members.**
 
-To keep it simple, we only have three basic rules:
+*Last Updated: May 10, 2022*
 
-1. Don't panic
-2. Don't be evil
-3. Don’t feed the trolls
+## Rules
 
-## Examples ##
+Because we want our Code of Conduct to be easy to understand and implement, we have only three basic rules:
+
+(1) Don't panic.
+
+(2) Don't be evil.
+
+(3) Don’t feed the trolls.
+
+## Examples
 
 The following non-exhaustive list provides specific guidelines and examples:
 
-- be respectful, be responsible, be kind
-- avoid asking for deadlines
-- don't feel entitled to free support, advice, or features if you are not a [contributor](https://docs.photoprism.app/developer-guide/), [sponsor](https://docs.photoprism.app/funding/), or paying customer
-- before reporting a bug, try to [determine the cause of your problem](https://docs.photoprism.app/getting-started/troubleshooting/)
-- if you have a [general question](https://github.com/photoprism/photoprism/discussions) or need [technical support](https://docs.photoprism.app/user-guide/#getting-support), don't use GitHub Issues
-- if you are having a bad day and want to offend someone, please go somewhere else
+(a) Be respectful, be responsible, be kind, avoid asking for [deadlines](https://docs.photoprism.app/developer-guide/code-quality/#go-slow-before-you-go-fast).
 
-## Reporting ## 
+(b) Do not feel entitled to free software, support, or advice if you are **not** a [contributor](https://docs.photoprism.app/developer-guide/), [sponsor](https://docs.photoprism.app/funding/), or paying customer.
 
-We encourage all community members to resolve problems on their own whenever possible. Instances of abusive, 
-harassing, or otherwise unacceptable behavior may be [reported](https://photoprism.app/contact) to us.
+(c) [Read the docs](https://docs.photoprism.app) and [determine the cause of your problem](https://docs.photoprism.app/getting-started/troubleshooting/) before opening invalid bug reports, starting a public "shitstorm" or insulting other community members in our chat rooms. Aside from being annoying for everyone, it also keeps our team from working on features and improvements that users like you are waiting for.
 
-## Enforcement ## 
+(d) If you are having a bad day and want to offend someone, please go somewhere else.
 
-Any violation may be punished with a snarky comment and finally a "plonk", which means that we ignore you 
-according to rule #3.
+## Reporting
+
+We encourage all community members to resolve problems on their own whenever possible. Instances of abusive, harassing, or otherwise unacceptable behavior [may be reported](https://photoprism.app/contact) to us.
+
+## Enforcement
+
+Violations may be punished with a [snarky comment](https://www.urbandictionary.com/define.php?term=snarky) and finally a **\*plonk\***[^1], meaning you will be ignored according to **Rule &#35;3**.
+
+[^1]: Plonk stands for the metaphorical sound of a user hitting the bottom of the kill file. It was first used in [Usenet forums](https://en.everybodywiki.com/Plonk_(Usenet)), a worldwide distributed discussion system and precursor to the Web.

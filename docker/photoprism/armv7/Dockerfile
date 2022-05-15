@@ -2,73 +2,41 @@
 FROM photoprism/develop:armv7 as build
 
 ARG TARGETARCH
-ARG TARGETPLATFORM
 ARG BUILD_TAG
-ARG GOPROXY
-ARG GODEBUG
 
-# Set up project directory
+# set up project directory
 WORKDIR "/go/src/github.com/photoprism/photoprism"
 COPY . .
 
-# Build frontend and backend
-RUN make dep build-js install
+# build and install dist files for prod env
+RUN make all install DESTDIR=/opt/photoprism
 
 ################################################## PRODUCTION STAGE ####################################################
-FROM ubuntu:21.10
+#### Base Image: Debian 12, Codename "Bookworm"
+FROM debian:bookworm-slim
 
-LABEL maintainer="Michael Mayer <hello@photoprism.org>"
+LABEL maintainer="Michael Mayer <hello@photoprism.app>"
 
 ARG TARGETARCH
-ARG TARGETPLATFORM
+ARG BUILD_TAG
 
-# Set environment variables
-ENV DEBIAN_FRONTEND="noninteractive" \
-    TMPDIR="/tmp"
-
-# Configure apt
-RUN echo 'Acquire::Retries "10";' > /etc/apt/apt.conf.d/80retry && \
-    echo 'APT::Install-Recommends "false";' > /etc/apt/apt.conf.d/80recommends && \
-    echo 'APT::Install-Suggests "false";' > /etc/apt/apt.conf.d/80suggests && \
-    echo 'APT::Get::Assume-Yes "true";' > /etc/apt/apt.conf.d/80forceyes && \
-    echo 'APT::Get::Fix-Missing "true";' > /etc/apt/apt.conf.d/80fixmissing
-
-# Install additional distribution packages
-RUN apt-get update && apt-get -qq dist-upgrade && apt dist-upgrade 2>/dev/null && apt-get -qq install --no-install-recommends \
-    gpgv \
-    wget \
-    curl \
-    make \
-    davfs2 \
-    ca-certificates \
-    mariadb-client \
-    sqlite3 \
-    tzdata \
-    libc6 \
-    libatomic1 \
-    libheif-examples \
-    librsvg2-bin \
-    gnupg \
-    gpg-agent \
-    apt-utils \
-    add-apt-key \
-    exiftool \
-    rawtherapee \
-    ffmpeg \
-    ffmpegthumbnailer \
-    libavcodec-extra && \
-    apt-get -y autoremove && apt-get -y autoclean && apt-get clean && rm -rf /var/lib/apt/lists/*
-
-# Set environment variables, see https://docs.photoprism.app/getting-started/config-options/
-ENV TF_CPP_MIN_LOG_LEVEL="2" \
-    PATH="/photoprism/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
-    PHOTOPRISM_ASSETS_PATH="/photoprism/assets" \
-    PHOTOPRISM_STORAGE_PATH="/photoprism/storage" \
-    PHOTOPRISM_BACKUP_PATH="/var/lib/photoprism" \
-    PHOTOPRISM_ORIGINALS_PATH="/photoprism/originals" \
+# set environment variables, see https://docs.photoprism.app/getting-started/config-options/
+ENV PHOTOPRISM_ARCH=$TARGETARCH \
+    DOCKER_TAG=$BUILD_TAG \
+    DOCKER_ENV="prod" \
+    PS1="\u@$DOCKER_TAG:\w\$ " \
+    PATH="/usr/local/sbin:/usr/sbin:/sbin:/usr/local/bin:/usr/bin:/bin:/scripts:/opt/photoprism/bin" \
+    LD_LIBRARY_PATH="/usr/local/lib:/usr/lib" \
+    TMPDIR="/tmp" \
+    DEBIAN_FRONTEND="noninteractive" \
+    TF_CPP_MIN_LOG_LEVEL="2" \
+    PHOTOPRISM_ASSETS_PATH="/opt/photoprism/assets" \
     PHOTOPRISM_IMPORT_PATH="/photoprism/import" \
-    PHOTOPRISM_LOG_FILENAME="/photoprism/photoprism.log" \
-    PHOTOPRISM_PID_FILENAME="/photoprism/photoprism.pid" \
+    PHOTOPRISM_ORIGINALS_PATH="/photoprism/originals" \
+    PHOTOPRISM_STORAGE_PATH="/photoprism/storage" \
+    PHOTOPRISM_BACKUP_PATH="/photoprism/storage/backups" \
+    PHOTOPRISM_LOG_FILENAME="/photoprism/storage/photoprism.log" \
+    PHOTOPRISM_PID_FILENAME="/photoprism/storage/photoprism.pid" \
     PHOTOPRISM_DEBUG="false" \
     PHOTOPRISM_PUBLIC="false" \
     PHOTOPRISM_READONLY="false" \
@@ -76,8 +44,7 @@ ENV TF_CPP_MIN_LOG_LEVEL="2" \
     PHOTOPRISM_DETECT_NSFW="false" \
     PHOTOPRISM_EXPERIMENTAL="false" \
     PHOTOPRISM_SITE_URL="http://localhost:2342/" \
-    PHOTOPRISM_SITE_TITLE="PhotoPrism" \
-    PHOTOPRISM_SITE_CAPTION="Browse Your Life" \
+    PHOTOPRISM_SITE_CAPTION="AI-Powered Photos App" \
     PHOTOPRISM_SITE_DESCRIPTION="" \
     PHOTOPRISM_SITE_AUTHOR="" \
     PHOTOPRISM_HTTP_HOST="0.0.0.0" \
@@ -96,56 +63,69 @@ ENV TF_CPP_MIN_LOG_LEVEL="2" \
     PHOTOPRISM_DISABLE_TENSORFLOW="false" \
     PHOTOPRISM_DISABLE_FACES="false" \
     PHOTOPRISM_DISABLE_CLASSIFICATION="false" \
-    PHOTOPRISM_DARKTABLE_PRESETS="false" \
+    PHOTOPRISM_RAW_PRESETS="false" \
     PHOTOPRISM_THUMB_FILTER="lanczos" \
     PHOTOPRISM_THUMB_UNCACHED="false" \
     PHOTOPRISM_THUMB_SIZE=2048 \
     PHOTOPRISM_THUMB_SIZE_UNCACHED=7680 \
     PHOTOPRISM_JPEG_SIZE=7680 \
-    PHOTOPRISM_JPEG_QUALITY=92 \
+    PHOTOPRISM_JPEG_QUALITY=85 \
     PHOTOPRISM_WORKERS=0 \
     PHOTOPRISM_WAKEUP_INTERVAL=900 \
     PHOTOPRISM_AUTO_INDEX=300 \
     PHOTOPRISM_AUTO_IMPORT=300
 
-# Copy dependencies
-COPY --from=build /go/bin/gosu /bin/gosu
-COPY --from=build /usr/lib/libtensorflow.so /usr/lib/libtensorflow.so
-COPY --from=build /usr/lib/libtensorflow_framework.so /usr/lib/libtensorflow_framework.so
-RUN ldconfig
+# copy dist files, scripts, and debian backports sources list
+COPY --from=build /opt/photoprism/ /opt/photoprism
+COPY --chown=root:root --chmod=755 /scripts/dist/* /scripts/
+COPY /docker/develop/bookworm/sources.list /etc/apt/sources.list.d/bookworm.list
 
-# Set default umask and create photoprism user
-RUN umask 0000 && useradd -m -U -u 1000 -d /photoprism photoprism && chmod a+rwx /photoprism
+# install additional distribution packages
+RUN echo 'APT::Acquire::Retries "3";' > /etc/apt/apt.conf.d/80retries && \
+    echo 'APT::Install-Recommends "false";' > /etc/apt/apt.conf.d/80recommends && \
+    echo 'APT::Install-Suggests "false";' > /etc/apt/apt.conf.d/80suggests && \
+    echo 'APT::Get::Assume-Yes "true";' > /etc/apt/apt.conf.d/80forceyes && \
+    echo 'APT::Get::Fix-Missing "true";' > /etc/apt/apt.conf.d/80fixmissing && \
+    mv /opt/photoprism/sbin/gosu /usr/local/sbin/gosu && \
+    chown root:root /usr/local/sbin/gosu && \
+    chmod 755 /usr/local/sbin/gosu && \
+    apt-get update && apt-get -qq dist-upgrade && apt-get -qq install --no-install-recommends \
+      libc6 ca-certificates sudo bash tzdata \
+      gpg zip unzip wget curl rsync make nano \
+      jq lsof lshw sqlite3 mariadb-client \
+      exiftool rawtherapee libheif-examples librsvg2-bin \
+      ffmpeg ffmpegthumbnailer libavcodec-extra libwebm1 \
+      libmatroska7 libdvdread8 libebml5 libgav1-0 libatomic1 \
+      libx264-163 libx265-199 \
+    && \
+    echo 'alias ll="ls -alh"' >> /etc/skel/.bashrc && \
+    echo 'export PS1="\u@$DOCKER_TAG:\w\$ "' >> /etc/skel/.bashrc && \
+    echo "ALL ALL=(ALL) NOPASSWD:SETENV: /scripts/entrypoint-init.sh" >> /etc/sudoers.d/init && \
+    cp /etc/skel/.bashrc /root/.bashrc && \
+    /scripts/create-users.sh && \
+    /scripts/cleanup.sh && \
+    cp /scripts/heif-convert.sh /usr/local/bin/heif-convert && \
+    install -d -m 0777 -o 1000 -g 1000 \
+      /var/lib/photoprism \
+      /tmp/photoprism \
+      /photoprism/originals \
+      /photoprism/import \
+      /photoprism/storage \
+      /photoprism/storage/sidecar \
+      /photoprism/storage/albums \
+      /photoprism/storage/backups \
+      /photoprism/storage/config \
+      /photoprism/storage/cache
+
+
+# define default directory and user
 WORKDIR /photoprism
 
-# Copy additional files to image
-COPY --from=build /root/.local/bin/photoprism /photoprism/bin/photoprism
-COPY --from=build /root/.photoprism/assets /photoprism/assets
-COPY --chown=root:root /docker/scripts/heif-convert.sh /usr/local/bin/heif-convert
-COPY --chown=root:root /docker/scripts/Makefile /root/Makefile
-COPY --chown=root:root /docker/photoprism/entrypoint.sh /entrypoint.sh
-
-# Create directories
-RUN mkdir -m 777 -p \
-    /var/lib/photoprism \
-    /tmp/photoprism \
-    /photoprism/originals \
-    /photoprism/import \
-    /photoprism/storage/config \
-    /photoprism/storage/cache && \
-    chown -Rf photoprism:photoprism /photoprism /var/lib/photoprism /tmp/photoprism && \
-    chmod -Rf a+rwx /photoprism /var/lib/photoprism /tmp/photoprism && \
-    chmod 755 /usr/local/bin/heif-convert /entrypoint.sh
-
-# Show photoprism version
-RUN photoprism -v
-
-# Expose http port
+# expose default http port 2342
 EXPOSE 2342
 
-# Configure entrypoint
-ENTRYPOINT ["/entrypoint.sh"]
-VOLUME /var/lib/photoprism
+# set container entrypoint script
+ENTRYPOINT ["/scripts/entrypoint.sh"]
 
-# Run server
-CMD ["photoprism", "start"]
+# start app server
+CMD ["/opt/photoprism/bin/photoprism", "start"]

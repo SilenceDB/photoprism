@@ -52,6 +52,7 @@ func Index() error {
 	}
 
 	conf := service.Config()
+	settings := conf.Settings()
 
 	start := time.Now()
 
@@ -59,12 +60,8 @@ func Index() error {
 
 	ind := service.Index()
 
-	indOpt := photoprism.IndexOptions{
-		Rescan:  false,
-		Convert: conf.Settings().Index.Convert && conf.SidecarWritable(),
-		Path:    entity.RootPath,
-		Stack:   true,
-	}
+	convert := settings.Index.Convert && conf.SidecarWritable()
+	indOpt := photoprism.NewIndexOptions(entity.RootPath, false, convert, true, false, true)
 
 	indexed := ind.Start(indOpt)
 

@@ -14,8 +14,8 @@ import (
 	"github.com/photoprism/photoprism/internal/photoprism"
 	"github.com/photoprism/photoprism/internal/query"
 	"github.com/photoprism/photoprism/internal/service"
+	"github.com/photoprism/photoprism/pkg/clean"
 	"github.com/photoprism/photoprism/pkg/fs"
-	"github.com/photoprism/photoprism/pkg/sanitize"
 )
 
 // FacesCommand registers the facial recognition subcommands.
@@ -53,7 +53,7 @@ var FacesCommand = cli.Command{
 		{
 			Name:      "index",
 			Usage:     "Searches originals for faces",
-			ArgsUsage: "[ORIGINALS SUB-FOLDER]",
+			ArgsUsage: "[originals folder]",
 			Action:    facesIndexAction,
 		},
 		{
@@ -239,9 +239,9 @@ func facesIndexAction(ctx *cli.Context) error {
 	subPath := strings.TrimSpace(ctx.Args().First())
 
 	if subPath == "" {
-		log.Infof("finding faces in %s", sanitize.Log(conf.OriginalsPath()))
+		log.Infof("finding faces in %s", clean.Log(conf.OriginalsPath()))
 	} else {
-		log.Infof("finding faces in %s", sanitize.Log(filepath.Join(conf.OriginalsPath(), subPath)))
+		log.Infof("finding faces in %s", clean.Log(filepath.Join(conf.OriginalsPath(), subPath)))
 	}
 
 	if conf.ReadOnly() {
@@ -250,14 +250,11 @@ func facesIndexAction(ctx *cli.Context) error {
 
 	var indexed fs.Done
 
+	settings := conf.Settings()
+
 	if w := service.Index(); w != nil {
-		opt := photoprism.IndexOptions{
-			Path:      subPath,
-			Rescan:    true,
-			Convert:   conf.Settings().Index.Convert && conf.SidecarWritable(),
-			Stack:     true,
-			FacesOnly: true,
-		}
+		convert := settings.Index.Convert && conf.SidecarWritable()
+		opt := photoprism.NewIndexOptions(subPath, true, convert, true, true, true)
 
 		indexed = w.Start(opt)
 	}

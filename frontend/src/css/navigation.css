@@ -8,14 +8,19 @@
     background: transparent;
 }
 
+nav .v-list__tile__title.title {
+    line-height: normal!important;
+}
+
 #p-navigation .nav-title {
-    text-align: center;
+    text-align: left;
     -webkit-box-flex: 1!important;
     -ms-flex-positive: 1!important;
     flex-grow: 1!important;
     margin-left: 10px;
     margin-right: 10px;
     max-height: 100%;
+    line-height: normal!important;
 }
 
 #p-navigation .nav-count {
@@ -53,7 +58,7 @@
     color: white;
 }
 
-#photoprism-info {
+#imprint {
     position: fixed;
     bottom: 0;
     left: 50%;
@@ -64,10 +69,15 @@
     border-radius: 5px 5px 0 0;
 }
 
-#photoprism-info a {
+#imprint a,
+#imprint span {
     text-decoration: none;
     font-size: 12px;
     color: #000;
+}
+
+#app.small-screen.show-nav main div.v-content__wrap {
+    padding-top: 48px;
 }
 
 #photoprism .v-tabs .v-toolbar__content {

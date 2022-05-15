@@ -70,7 +70,7 @@
         </v-btn>
 
         <v-alert
-            v-if="config.count.hidden > 1"
+            v-if="ready && !busy && config.count.hidden > 1"
             :value="true"
             color="error"
             icon="priority_high"
@@ -224,14 +224,12 @@ export default {
           this.busy = true;
           this.completed = 0;
           this.fileName = data.filePath;
-
           break;
         case "indexing":
           this.action = this.$gettext("Indexing");
           this.busy = true;
           this.completed = 0;
           this.fileName = data.fileName;
-
           break;
         case "updating":
           if (data.step === "stacks") {
@@ -249,28 +247,24 @@ export default {
           this.busy = true;
           this.completed = 0;
           this.fileName = "";
-
           break;
         case "converting":
           this.action = this.$gettext("Converting");
           this.busy = true;
           this.completed = 0;
           this.fileName = data.fileName;
-
           break;
         case "thumbnails":
           this.action = this.$gettext("Creating thumbnails for");
           this.busy = true;
           this.completed = 0;
           this.fileName = data.fileName;
-
           break;
         case 'completed':
           this.action = "";
           this.busy = false;
           this.completed = 100;
           this.fileName = '';
-
           break;
         default:
           console.log(data);

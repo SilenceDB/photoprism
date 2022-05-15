@@ -12,8 +12,9 @@ import (
 )
 
 func TestMain(m *testing.M) {
+	_ = os.Setenv("PHOTOPRISM_TEST", "true")
 	log = logrus.StandardLogger()
-	log.SetLevel(logrus.DebugLevel)
+	log.SetLevel(logrus.TraceLevel)
 
 	c := TestConfig()
 
@@ -74,17 +75,19 @@ func TestConfig_Copyright(t *testing.T) {
 	assert.Equal(t, "", copyright)
 }
 
-func TestConfig_ConfigFile(t *testing.T) {
-	c := NewConfig(CliTestContext())
+func TestConfig_OptionsYaml(t *testing.T) {
+	t.Run("Default", func(t *testing.T) {
+		c := NewConfig(CliTestContext())
+		assert.Contains(t, c.OptionsYaml(), "options.yml")
+	})
 
-	assert.Contains(t, c.ConfigFile(), "options.yml")
+	t.Run("ChangePath", func(t *testing.T) {
+		c := NewConfig(CliTestContext())
+		assert.Contains(t, c.OptionsYaml(), "options.yml")
+		c.options.ConfigPath = "/go/src/github.com/photoprism/photoprism/internal/config/testdata/"
+		assert.Equal(t, "/go/src/github.com/photoprism/photoprism/internal/config/testdata/options.yml", c.OptionsYaml())
+	})
 }
-
-/*func TestConfig_SettingsPath(t *testing.T) {
-	c := NewConfig(CliTestContext())
-
-	assert.Contains(t, c.ConfigPath(), "/storage/testdata/config")
-}*/
 
 func TestConfig_BackupPath(t *testing.T) {
 	c := NewConfig(CliTestContext())
@@ -148,13 +151,6 @@ func TestConfig_ImportPath(t *testing.T) {
 	assert.True(t, strings.HasSuffix(result, "/storage/testdata/import"))
 }
 
-func TestConfig_ExifToolBin(t *testing.T) {
-	c := NewConfig(CliTestContext())
-
-	bin := c.ExifToolBin()
-	assert.Equal(t, "/usr/bin/exiftool", bin)
-}
-
 func TestConfig_CachePath(t *testing.T) {
 	c := NewConfig(CliTestContext())
 
@@ -164,8 +160,8 @@ func TestConfig_CachePath(t *testing.T) {
 func TestConfig_ThumbnailsPath(t *testing.T) {
 	c := NewConfig(CliTestContext())
 
-	assert.True(t, strings.HasPrefix(c.ThumbPath(), "/"))
-	assert.True(t, strings.HasSuffix(c.ThumbPath(), "storage/testdata/cache/thumbnails"))
+	assert.True(t, strings.HasPrefix(c.ThumbCachePath(), "/"))
+	assert.True(t, strings.HasSuffix(c.ThumbCachePath(), "storage/testdata/cache/thumbnails"))
 }
 
 func TestConfig_AssetsPath(t *testing.T) {
@@ -248,12 +244,19 @@ func TestConfig_ClientConfig(t *testing.T) {
 	cc := c.UserConfig()
 
 	assert.IsType(t, ClientConfig{}, cc)
+
+	if cc.JsUri == "" {
+		t.Error("the JavaScript asset URI must not be empty, make sure that the frontend has been built")
+	}
+
+	if cc.CssUri == "" {
+		t.Error("the CSS asset URI must not be empty, make sure that the frontend has been built")
+	}
+
 	assert.NotEmpty(t, cc.Name)
 	assert.NotEmpty(t, cc.Version)
 	assert.NotEmpty(t, cc.Copyright)
 	assert.NotEmpty(t, cc.Thumbs)
-	assert.NotEmpty(t, cc.JsUri)
-	assert.NotEmpty(t, cc.CssUri)
 	assert.NotEmpty(t, cc.ManifestUri)
 	assert.Equal(t, true, cc.Debug)
 	assert.Equal(t, false, cc.Demo)
@@ -282,7 +285,16 @@ func TestConfig_Workers(t *testing.T) {
 
 func TestConfig_WakeupInterval(t *testing.T) {
 	c := NewConfig(CliTestContext())
-	assert.Equal(t, time.Duration(900000000000), c.WakeupInterval())
+	i := c.WakeupInterval()
+	assert.Equal(t, "1h34m9s", c.WakeupInterval().String())
+	c.options.WakeupInterval = 45
+	assert.Equal(t, "1m0s", c.WakeupInterval().String())
+	c.options.WakeupInterval = 0
+	assert.Equal(t, "15m0s", c.WakeupInterval().String())
+	c.options.WakeupInterval = 150
+	assert.Equal(t, "2m30s", c.WakeupInterval().String())
+	c.options.WakeupInterval = i
+	assert.Equal(t, "1h34m9s", c.WakeupInterval().String())
 }
 
 func TestConfig_AutoIndex(t *testing.T) {
@@ -306,9 +318,31 @@ func TestConfig_GeoApi(t *testing.T) {
 func TestConfig_OriginalsLimit(t *testing.T) {
 	c := NewConfig(CliTestContext())
 
-	assert.Equal(t, int64(-1), c.OriginalsLimit())
+	assert.Equal(t, -1, c.OriginalsLimit())
 	c.options.OriginalsLimit = 800
-	assert.Equal(t, int64(838860800), c.OriginalsLimit())
+	assert.Equal(t, 800, c.OriginalsLimit())
+}
+
+func TestConfig_OriginalsLimitBytes(t *testing.T) {
+	c := NewConfig(CliTestContext())
+
+	assert.Equal(t, int64(-1), c.OriginalsLimitBytes())
+	c.options.OriginalsLimit = 800
+	assert.Equal(t, int64(838860800), c.OriginalsLimitBytes())
+}
+
+func TestConfig_ResolutionLimit(t *testing.T) {
+	c := NewConfig(CliTestContext())
+
+	assert.Equal(t, -1, c.ResolutionLimit())
+	c.options.ResolutionLimit = 800
+	assert.Equal(t, 800, c.ResolutionLimit())
+	c.options.ResolutionLimit = 950
+	assert.Equal(t, 900, c.ResolutionLimit())
+	c.options.ResolutionLimit = 0
+	assert.Equal(t, -1, c.ResolutionLimit())
+	c.options.ResolutionLimit = -1
+	assert.Equal(t, -1, c.ResolutionLimit())
 }
 
 func TestConfig_BaseUri(t *testing.T) {

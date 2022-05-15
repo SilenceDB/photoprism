@@ -1,7 +1,7 @@
 <template>
   <v-form ref="form" lazy-validation
           dense autocomplete="off" class="p-photo-toolbar p-album-toolbar" accept-charset="UTF-8"
-          @submit.prevent="filterChange">
+          @submit.prevent="updateQuery()">
     <v-toolbar flat :dense="$vuetify.breakpoint.smAndDown" class="page-toolbar" color="secondary">
       <v-toolbar-title :title="album.Title">
         {{ album.Title }}
@@ -9,7 +9,7 @@
 
       <v-spacer></v-spacer>
 
-      <v-btn icon class="hidden-xs-only action-reload" :title="$gettext('Reload')" @click.stop="refresh">
+      <v-btn icon class="hidden-xs-only action-reload" :title="$gettext('Reload')" @click.stop="refresh()">
         <v-icon>refresh</v-icon>
       </v-btn>
 
@@ -23,7 +23,7 @@
       </v-btn>
 
       <v-btn v-if="$config.feature('download')" icon class="hidden-xs-only action-download" :title="$gettext('Download')"
-             @click.stop="download">
+             @click.stop="download()">
         <v-icon>get_app</v-icon>
       </v-btn>
 
@@ -62,7 +62,7 @@
 
     <p-share-dialog :show="dialog.share" :model="album" @upload="webdavUpload"
                     @close="dialog.share = false"></p-share-dialog>
-    <p-share-upload-dialog :show="dialog.upload" :selection="[album.getId()]" @cancel="dialog.upload = false"
+    <p-share-upload-dialog :show="dialog.upload" :items="{albums: album.getId()}" :model="album" @cancel="dialog.upload = false"
                            @confirm="dialog.upload = false"></p-share-upload-dialog>
     <p-album-edit-dialog :show="dialog.edit" :album="album" @close="dialog.edit = false"></p-album-edit-dialog>
   </v-form>
@@ -75,11 +75,30 @@ import download from "common/download";
 export default {
   name: 'PAlbumToolbar',
   props: {
-    album: Object,
-    filter: Object,
-    settings: Object,
-    refresh: Function,
-    filterChange: Function,
+    album: {
+      type: Object,
+      default: () => {},
+    },
+    filter: {
+      type: Object,
+      default: () => {},
+    },
+    updateFilter: {
+      type: Function,
+      default: () => {},
+    },
+    updateQuery: {
+      type: Function,
+      default: () => {},
+    },
+    settings: {
+      type: Object,
+      default: () => {},
+    },
+    refresh: {
+      type: Function,
+      default: () => {},
+    },
   },
   data() {
     const cameras = [{
@@ -140,25 +159,10 @@ export default {
         this.album.update();
       }
     },
-    dropdownChange() {
-      this.filterChange();
-
-      if (window.innerWidth < 600) {
-        this.searchExpanded = false;
-      }
-
-      if (this.filter.order !== this.album.Order) {
-        this.album.Order = this.filter.order;
-        this.updateAlbum();
-      }
-    },
     setView(name) {
-      this.settings.view = name;
-      this.filterChange();
-    },
-    clearQuery() {
-      this.filter.q = '';
-      this.filterChange();
+      if (name) {
+        this.refresh({'view': name});
+      }
     },
     download() {
       this.onDownload(`${this.$config.apiUri}/albums/${this.album.UID}/dl?t=${this.$config.downloadToken()}`);

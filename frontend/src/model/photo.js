@@ -1,30 +1,25 @@
 /*
 
-Copyright (c) 2018 - 2022 Michael Mayer <hello@photoprism.app>
+Copyright (c) 2018 - 2022 PhotoPrism UG. All rights reserved.
 
     This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU Affero General Public License as published
-    by the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
+    it under Version 3 of the GNU Affero General Public License (the "AGPL"):
+    <https://docs.photoprism.app/license/agpl>
 
     This program is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU Affero General Public License for more details.
 
-    You should have received a copy of the GNU Affero General Public License
-    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+    The AGPL is supplemented by our Trademark and Brand Guidelines,
+    which describe how our Brand Assets may be used:
+    <https://photoprism.app/trademark>
 
-    PhotoPrism® is a registered trademark of Michael Mayer.  You may use it as required
-    to describe our software, run your own server, for educational purposes, but not for
-    offering commercial goods, products, or services without prior written permission.
-    In other words, please ask.
-
-Feel free to send an e-mail to hello@photoprism.app if you have questions,
+Feel free to send an email to hello@photoprism.app if you have questions,
 want to support our work, or just want to say hello.
 
 Additional information can be found in our Developer Guide:
-https://docs.photoprism.app/developer-guide/
+<https://docs.photoprism.app/developer-guide/>
 
 */
 
@@ -34,7 +29,7 @@ import Marker from "model/marker";
 import Api from "common/api";
 import { DateTime } from "luxon";
 import Util from "common/util";
-import { config } from "../session";
+import { config } from "app/session";
 import countries from "options/countries.json";
 import { $gettext } from "common/vm";
 import Clipboard from "common/clipboard";
@@ -44,11 +39,14 @@ import * as src from "common/src";
 export const CodecAvc1 = "avc1";
 export const FormatMp4 = "mp4";
 export const FormatAvc = "avc";
+export const FormatGif = "gif";
 export const FormatJpeg = "jpg";
-export const TypeImage = "image";
-export const TypeVideo = "video";
-export const TypeLive = "live";
-export const TypeRaw = "raw";
+export const MediaImage = "image";
+export const MediaAnimated = "animated";
+export const MediaSidecar = "sidecar";
+export const MediaVideo = "video";
+export const MediaLive = "live";
+export const MediaRaw = "raw";
 export const YearUnknown = -1;
 export const MonthUnknown = -1;
 export const DayUnknown = -1;
@@ -69,13 +67,15 @@ export const DATE_FULL = {
 
 export const DATE_FULL_TZ = {
   year: num,
-  month: long,
+  month: short,
   day: num,
-  weekday: long,
+  weekday: short,
   hour: num,
   minute: num,
   timeZoneName: short,
 };
+
+export let BatchSize = 60;
 
 export class Photo extends RestModel {
   constructor(values) {
@@ -87,7 +87,7 @@ export class Photo extends RestModel {
       ID: "",
       UID: "",
       DocumentID: "",
-      Type: TypeImage,
+      Type: MediaImage,
       TypeSrc: "",
       Stack: 0,
       Favorite: false,
@@ -141,6 +141,8 @@ export class Photo extends RestModel {
         CopyrightSrc: "",
         License: "",
         LicenseSrc: "",
+        Software: "",
+        SoftwareSrc: "",
       },
       Files: [],
       Labels: [],
@@ -160,6 +162,10 @@ export class Photo extends RestModel {
       FileUID: "",
       FileRoot: "",
       FileName: "",
+      FileType: "",
+      MediaType: "",
+      FPS: 0.0,
+      Frames: 0,
       Hash: "",
       Width: "",
       Height: "",
@@ -346,7 +352,9 @@ export class Photo extends RestModel {
   }
 
   isPlayable() {
-    if (!this.Files) {
+    if (this.Type === MediaAnimated) {
+      return true;
+    } else if (!this.Files) {
       return false;
     }
 
@@ -362,6 +370,10 @@ export class Photo extends RestModel {
 
     let main = this.mainFile();
     let file = this.videoFile();
+
+    if (!file) {
+      file = main;
+    }
 
     const vw = Math.max(document.documentElement.clientWidth, window.innerWidth || 0);
     const vh = Math.max(document.documentElement.clientHeight, window.innerHeight || 0);
@@ -396,7 +408,7 @@ export class Photo extends RestModel {
       height = newHeight;
     }
 
-    const loop = file.Duration >= 0 && file.Duration <= 5000000000;
+    const loop = this.Type === MediaAnimated || (file.Duration >= 0 && file.Duration <= 5000000000);
     const poster = this.thumbnailUrl("fit_720");
     const error = false;
 
@@ -411,18 +423,30 @@ export class Photo extends RestModel {
     let file = this.Files.find((f) => f.Codec === CodecAvc1);
 
     if (!file) {
-      file = this.Files.find((f) => f.Type === FormatMp4);
+      file = this.Files.find((f) => f.FileType === FormatMp4);
     }
 
     if (!file) {
       file = this.Files.find((f) => !!f.Video);
     }
 
+    if (!file) {
+      file = this.gifFile();
+    }
+
     return file;
   }
 
+  gifFile() {
+    if (!this.Files) {
+      return false;
+    }
+
+    return this.Files.find((f) => f.FileType === FormatGif);
+  }
+
   videoUrl() {
-    const file = this.videoFile();
+    let file = this.videoFile();
 
     if (file) {
       return `${config.apiUri}/videos/${file.Hash}/${config.previewToken()}/${FormatAvc}`;
@@ -442,7 +466,7 @@ export class Photo extends RestModel {
       return file;
     }
 
-    return this.Files.find((f) => f.Type === FormatJpeg);
+    return this.Files.find((f) => f.FileType === FormatJpeg);
   }
 
   jpegFiles() {
@@ -450,7 +474,7 @@ export class Photo extends RestModel {
       return [this];
     }
 
-    return this.Files.filter((f) => f.Type === FormatJpeg);
+    return this.Files.filter((f) => f.FileType === FormatJpeg);
   }
 
   mainFileHash() {
@@ -512,6 +536,13 @@ export class Photo extends RestModel {
   }
 
   downloadAll() {
+    const s = config.settings();
+
+    if (!s || !s.features || !s.download || !s.features.download || s.download.disabled) {
+      console.log("download: disabled in settings", s.features, s.download);
+      return;
+    }
+
     const token = config.downloadToken();
 
     if (!this.Files) {
@@ -527,16 +558,34 @@ export class Photo extends RestModel {
     }
 
     this.Files.forEach((file) => {
-      if (!file || !file.Hash || file.Sidecar) {
-        // Don't download broken files and sidecars.
-        if (config.debug) console.log("download: skipped file", file);
+      if (!file || !file.Hash) {
         return;
       }
 
-      // Skip related images if video.
+      // Originals only?
+      if (s.download.originals && file.Root.length > 1) {
+        // Don't download broken files and sidecars.
+        if (config.debug) console.log(`download: skipped ${file.Root} file ${file.Name}`);
+        return;
+      }
+
+      // Skip metadata sidecar files?
+      if (!s.download.mediaSidecar && (file.MediaType === MediaSidecar || file.Sidecar)) {
+        // Don't download broken files and sidecars.
+        if (config.debug) console.log(`download: skipped sidecar file ${file.Name}`);
+        return;
+      }
+
+      // Skip RAW images?
+      if (!s.download.mediaRaw && (file.MediaType === MediaRaw || file.FileType === MediaRaw)) {
+        if (config.debug) console.log(`download: skipped raw file ${file.Name}`);
+        return;
+      }
+
+      // If this is a video, always skip stacked images...
       // see https://github.com/photoprism/photoprism/issues/1436
-      if (this.Type === TypeVideo && !file.Video) {
-        if (config.debug) console.log("download: skipped image", file);
+      if (this.Type === MediaVideo && !(file.MediaType === MediaVideo || file.Video)) {
+        if (config.debug) console.log(`download: skipped video sidecar ${file.Name}`);
         return;
       }
 
@@ -683,9 +732,17 @@ export class Photo extends RestModel {
     let info = [];
 
     if (this.Camera) {
-      info.push(this.Camera.Make + " " + this.Camera.Model);
+      if (this.Camera.Model.length > 7) {
+        info.push(this.Camera.Model);
+      } else {
+        info.push(this.Camera.Make + " " + this.Camera.Model);
+      }
     } else if (this.CameraModel && this.CameraMake) {
-      info.push(this.CameraMake + " " + this.CameraModel);
+      if (this.CameraModel.length > 7) {
+        info.push(this.CameraModel);
+      } else {
+        info.push(this.CameraMake + " " + this.CameraModel);
+      }
     }
 
     let file = this.videoFile();
@@ -833,7 +890,14 @@ export class Photo extends RestModel {
       values.PlaceSrc = src.Manual;
     }
 
-    if (values.TakenAt || values.TimeZone || values.Day || values.Month || values.Year) {
+    if (
+      values.TakenAt ||
+      values.TakenAtLocal ||
+      values.TimeZone ||
+      values.Day ||
+      values.Month ||
+      values.Year
+    ) {
       values.TakenSrc = src.Manual;
     }
 
@@ -885,7 +949,14 @@ export class Photo extends RestModel {
   }
 
   static batchSize() {
-    return 60;
+    return BatchSize;
+  }
+
+  static setBatchSize(count) {
+    const s = parseInt(count);
+    if (!isNaN(s) && s >= 24) {
+      BatchSize = s;
+    }
   }
 
   static getCollectionResource() {

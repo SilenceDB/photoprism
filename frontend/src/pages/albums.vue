@@ -1,23 +1,25 @@
 <template>
   <div v-infinite-scroll="loadMore" class="p-page p-page-albums" style="user-select: none"
-       :infinite-scroll-disabled="scrollDisabled" :infinite-scroll-distance="1200"
+       :infinite-scroll-disabled="scrollDisabled" :infinite-scroll-distance="scrollDistance"
        :infinite-scroll-listen-for-event="'scrollRefresh'">
 
-    <v-form ref="form" class="p-albums-search" lazy-validation dense @submit.prevent="updateQuery">
+    <v-form ref="form" class="p-albums-search" lazy-validation dense @submit.prevent="updateQuery()">
       <v-toolbar flat :dense="$vuetify.breakpoint.smAndDown" class="page-toolbar" color="secondary">
-        <v-text-field id="search"
-                      v-model="filter.q"
-                      solo hide-details clearable overflow single-line
+        <v-text-field :value="filter.q"
+                      solo hide-details clearable overflow single-line validate-on-blur
                       class="input-search background-inherit elevation-0"
                       :label="$gettext('Search')"
                       browser-autocomplete="off"
+                      autocorrect="off"
+                      autocapitalize="none"
                       prepend-inner-icon="search"
                       color="secondary-dark"
-                      @keyup.enter.native="updateQuery"
-                      @click:clear="clearQuery"
+                      @change="(v) => {updateFilter({'q': v})}"
+                      @keyup.enter.native="(e) => updateQuery({'q': e.target.value})"
+                      @click:clear="() => {updateQuery({'q': ''})}"
         ></v-text-field>
 
-        <v-overflow-btn v-model="filter.category"
+        <v-overflow-btn :value="filter.category"
                   solo hide-details single-line
                   :label="$gettext('Category')"
                   color="secondary-dark"
@@ -26,11 +28,11 @@
                   append-icon=""
                   :items="categories"
                   class="hidden-xs-only input-category background-inherit elevation-0"
-                  @change="updateQuery"
+                  @change="(v) => {updateQuery({'category': v})}"
         >
         </v-overflow-btn>
 
-        <v-btn icon class="action-reload" :title="$gettext('Reload')" @click.stop="refresh">
+        <v-btn icon class="action-reload" :title="$gettext('Reload')" @click.stop="refresh()">
           <v-icon>refresh</v-icon>
         </v-btn>
 
@@ -40,7 +42,7 @@
         </v-btn>
 
         <v-btn v-if="staticFilter.type === 'album'" icon class="action-add" :title="$gettext('Add Album')"
-               @click.prevent="create">
+               @click.prevent="create()">
           <v-icon>add</v-icon>
         </v-btn>
       </v-toolbar>
@@ -96,9 +98,9 @@
                   aspect-ratio="1"
                   style="user-select: none"
                   class="accent lighten-2 clickable"
-                  @touchstart="input.touchStart($event, index)"
-                  @touchend.prevent="onClick($event, index)"
-                  @mousedown="input.mouseDown($event, index)"
+                  @touchstart.passive="input.touchStart($event, index)"
+                  @touchend.stop.prevent="onClick($event, index)"
+                  @mousedown.stop.prevent="input.mouseDown($event, index)"
                   @click.stop.prevent="onClick($event, index)"
               >
                 <v-btn v-if="featureShare && album.LinkCount > 0" :ripple="false"
@@ -198,7 +200,7 @@
     </v-container>
     <p-share-dialog :show="dialog.share" :model="model" @upload="webdavUpload"
                     @close="dialog.share = false"></p-share-dialog>
-    <p-share-upload-dialog :show="dialog.upload" :selection="selection" @cancel="dialog.upload = false"
+    <p-share-upload-dialog :show="dialog.upload" :items="{albums: selection}" :model="model" @cancel="dialog.upload = false"
                            @confirm="dialog.upload = false"></p-share-upload-dialog>
     <p-album-edit-dialog :show="dialog.edit" :album="model" @close="dialog.edit = false"></p-album-edit-dialog>
   </div>
@@ -216,8 +218,14 @@ import {Input, InputInvalid, ClickShort, ClickLong} from "common/input";
 export default {
   name: 'PPageAlbums',
   props: {
-    staticFilter: Object,
-    view: String,
+    staticFilter: {
+      type: Object,
+      default: () => {},
+    },
+    view: {
+      type: String,
+      default: "",
+    },
   },
   data() {
     const query = this.$route.query;
@@ -245,11 +253,13 @@ export default {
       results: [],
       loading: true,
       scrollDisabled: true,
+      scrollDistance: window.innerHeight*2,
       batchSize: Album.batchSize(),
       offset: 0,
       page: 0,
       selection: [],
       settings: settings,
+      q: q,
       filter: filter,
       lastFilter: {},
       routeName: routeName,
@@ -281,10 +291,12 @@ export default {
     '$route'() {
       const query = this.$route.query;
 
-      this.filter.q = query["q"] ? query["q"] : "";
-      this.filter.category = query["category"] ? query["category"] : "";
-      this.lastFilter = {};
       this.routeName = this.$route.name;
+      this.lastFilter = {};
+      this.q = query["q"] ? query["q"] : "";
+      this.filter.q = this.q;
+      this.filter.category = query["category"] ? query["category"] : "";
+
       this.search();
     }
   },
@@ -428,10 +440,6 @@ export default {
         }
       }
     },
-    clearQuery() {
-      this.filter.q = '';
-      this.search();
-    },
     loadMore() {
       if (this.scrollDisabled) return;
 
@@ -481,8 +489,46 @@ export default {
         this.listen = true;
       });
     },
-    updateQuery() {
-      this.filter.q = this.filter.q.trim();
+    updateSettings(props) {
+      if (!props || typeof props !== "object" || props.target) {
+        return;
+      }
+
+      for (const [key, value] of Object.entries(props)) {
+        if (!this.settings.hasOwnProperty(key)) {
+          continue;
+        }
+        switch (typeof value) {
+          case "string":
+            this.settings[key] = value.trim();
+            break;
+          default:
+            this.settings[key] = value;
+        }
+      }
+    },
+    updateFilter(props) {
+      if (!props || typeof props !== "object" || props.target) {
+        return;
+      }
+
+      for (const [key, value] of Object.entries(props)) {
+        if (!this.filter.hasOwnProperty(key)) {
+          continue;
+        }
+        switch (typeof value) {
+          case "string":
+            this.filter[key] = value.trim();
+            break;
+          default:
+            this.filter[key] = value;
+        }
+      }
+    },
+    updateQuery(props) {
+      this.updateFilter(props);
+
+      if (this.loading) return;
 
       const query = {
         view: this.settings.view
@@ -563,8 +609,11 @@ export default {
         this.listen = true;
       });
     },
-    refresh() {
+    refresh(props) {
+      this.updateSettings(props);
+
       if (this.loading) return;
+
       this.loading = true;
       this.page = 0;
       this.dirty = true;

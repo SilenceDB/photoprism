@@ -1,34 +1,40 @@
 <template>
   <div v-infinite-scroll="loadMore" class="p-page p-page-errors" :infinite-scroll-disabled="scrollDisabled"
-       :infinite-scroll-distance="1200" :infinite-scroll-listen-for-event="'scrollRefresh'">
+       :infinite-scroll-distance="scrollDistance" :infinite-scroll-listen-for-event="'scrollRefresh'">
     <v-toolbar flat :dense="$vuetify.breakpoint.smAndDown" class="page-toolbar" color="secondary">
-      <v-text-field v-model="filter.q"
+      <v-text-field :value="filter.q"
+                    solo hide-details clearable overflow single-line validate-on-blur
                     class="input-search background-inherit elevation-0"
                     browser-autocomplete="off"
-                    solo hide-details clearable overflow
+                    autocorrect="off"
+                    autocapitalize="none"
                     :label="$gettext('Search')"
                     prepend-inner-icon="search"
                     color="secondary-dark"
-                    @click:clear="clearQuery"
-                    @keyup.enter.native="updateQuery"
+                    @change="(v) => {updateFilter({'q': v})}"
+                    @keyup.enter.native="(e) => updateQuery({'q': e.target.value})"
+                    @click:clear="() => {updateQuery({'q': ''})}"
       ></v-text-field>
-
-      <v-btn icon class="action-reload" :title="$gettext('Reload')" @click.stop="reload">
+      <v-spacer></v-spacer>
+      <v-btn icon class="action-reload" :title="$gettext('Reload')" @click.stop="onReload()">
         <v-icon>refresh</v-icon>
       </v-btn>
-
-      <v-btn icon href="https://github.com/photoprism/photoprism/issues" target="_blank" class="action-bug-report"
-             :title="$gettext('Report Bug')">
+      <v-btn v-if="!isPublic" icon class="action-delete" :title="$gettext('Delete')" @click.stop="onDelete()">
+        <v-icon>delete</v-icon>
+      </v-btn>
+      <v-btn icon href="https://docs.photoprism.app/getting-started/troubleshooting/" target="_blank" class="action-bug-report"
+             :title="$gettext('Troubleshooting Checklists')">
         <v-icon>bug_report</v-icon>
       </v-btn>
     </v-toolbar>
     <v-container v-if="loading" fluid class="pa-4">
       <v-progress-linear color="secondary-dark" :indeterminate="true"></v-progress-linear>
     </v-container>
-    <v-list v-else-if="errors.length > 0" dense two-line class="transparent">
+    <v-list v-else-if="errors.length > 0" dense two-line class="transparent pa-1">
       <v-list-tile
           v-for="err in errors" :key="err.ID"
           avatar
+          class="rounded-4"
           @click="showDetails(err)"
       >
         <v-list-tile-avatar>
@@ -56,7 +62,8 @@
         </p>
       </v-alert>
     </div>
-
+    <p-confirm-dialog :show="dialog.delete" icon="delete_outline" @cancel="dialog.delete = false"
+                             @confirm="onConfirmDelete"></p-confirm-dialog>
     <v-dialog
         v-model="details.show"
         max-width="500"
@@ -100,12 +107,16 @@ export default {
       dirty: false,
       loading: false,
       scrollDisabled: false,
+      scrollDistance: window.innerHeight*2,
       filter: {q},
+      isPublic: this.$config.get("public"),
       batchSize: 100,
       offset: 0,
       page: 0,
       errors: [],
-      results: [],
+      dialog: {
+        delete: false,
+      },
       details: {
         show: false,
         err: {"Level": "", "Message": "", "Time": ""},
@@ -116,15 +127,35 @@ export default {
     '$route'() {
       const query = this.$route.query;
       this.filter.q = query['q'] ? query['q'] : '';
-      this.reload();
+      this.onReload();
     }
   },
   created() {
     this.loadMore();
   },
   methods: {
-    updateQuery() {
-      this.filter.q = this.filter.q.trim();
+    updateFilter(props) {
+      if (!props || typeof props !== "object" || props.target) {
+        return;
+      }
+
+      for (const [key, value] of Object.entries(props)) {
+        if (!this.filter.hasOwnProperty(key)) {
+          continue;
+        }
+        switch (typeof value) {
+          case "string":
+            this.filter[key] = value.trim();
+            break;
+          default:
+            this.filter[key] = value;
+        }
+      }
+    },
+    updateQuery(props) {
+      this.updateFilter(props);
+
+      if (this.loading) return;
 
       const query = {};
 
@@ -142,15 +173,41 @@ export default {
 
       this.$router.replace({query});
     },
-    clearQuery() {
-      this.filter.q = "";
-      this.updateQuery();
-    },
     showDetails(err) {
       this.details.err = err;
       this.details.show = true;
     },
-    reload() {
+    onDelete() {
+      if (this.loading) {
+        return;
+      }
+
+      this.dialog.delete = true;
+    },
+    onConfirmDelete() {
+      this.dialog.delete = false;
+
+      if (this.loading) {
+        return;
+      }
+
+      this.loading = true;
+      this.scrollDisabled = true;
+
+      // Delete error logs.
+      Api.delete("errors").then((resp) => {
+        if (resp && resp.data.code && resp.data.code === 200) {
+          this.errors = [];
+          this.dirty = false;
+          this.page = 0;
+          this.offset = 0;
+        }
+      }).finally(() => {
+        this.scrollDisabled = false;
+        this.loading = false;
+      });
+    },
+    onReload() {
       if (this.loading) {
         return;
       }
@@ -158,6 +215,7 @@ export default {
       this.page = 0;
       this.offset = 0;
       this.scrollDisabled = false;
+
       this.loadMore();
     },
     loadMore() {
@@ -175,6 +233,7 @@ export default {
 
       const params = {count, offset, q};
 
+      // Fetch error logs.
       Api.get("errors", {params}).then((resp) => {
         if (!resp.data) {
           resp.data = [];

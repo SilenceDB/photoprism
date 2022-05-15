@@ -1,30 +1,25 @@
 /*
 
-Copyright (c) 2018 - 2022 Michael Mayer <hello@photoprism.app>
+Copyright (c) 2018 - 2022 PhotoPrism UG. All rights reserved.
 
     This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU Affero General Public License as published
-    by the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
+    it under Version 3 of the GNU Affero General Public License (the "AGPL"):
+    <https://docs.photoprism.app/license/agpl>
 
     This program is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU Affero General Public License for more details.
 
-    You should have received a copy of the GNU Affero General Public License
-    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+    The AGPL is supplemented by our Trademark and Brand Guidelines,
+    which describe how our Brand Assets may be used:
+    <https://photoprism.app/trademark>
 
-    PhotoPrism® is a registered trademark of Michael Mayer.  You may use it as required
-    to describe our software, run your own server, for educational purposes, but not for
-    offering commercial goods, products, or services without prior written permission.
-    In other words, please ask.
-
-Feel free to send an e-mail to hello@photoprism.app if you have questions,
+Feel free to send an email to hello@photoprism.app if you have questions,
 want to support our work, or just want to say hello.
 
 Additional information can be found in our Developer Guide:
-https://docs.photoprism.app/developer-guide/
+<https://docs.photoprism.app/developer-guide/>
 
 */
 package main
@@ -33,50 +28,36 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/urfave/cli"
+
 	"github.com/photoprism/photoprism/internal/commands"
 	"github.com/photoprism/photoprism/internal/config"
 	"github.com/photoprism/photoprism/internal/event"
-	"github.com/urfave/cli"
 )
 
 var version = "development"
 var log = event.Log
 
+const appDescription = "Visit https://docs.photoprism.app/ to learn more."
+const appCopyright = "(c) 2018-2022 PhotoPrism UG. All rights reserved."
+
 func main() {
+	defer func() {
+		if r := recover(); r != nil {
+			os.Exit(1)
+		}
+	}()
+
 	app := cli.NewApp()
 	app.Name = "PhotoPrism"
 	app.HelpName = filepath.Base(os.Args[0])
-	app.Usage = "Browse Your Life in Pictures"
-	app.Description = "For setup instructions and a user guide, visit https://docs.photoprism.app/"
+	app.Usage = "AI-Powered Photos App"
+	app.Description = appDescription
 	app.Version = version
-	app.Copyright = "(c) 2018-2022 Michael Mayer <hello@photoprism.app>"
+	app.Copyright = appCopyright
 	app.EnableBashCompletion = true
-	app.Flags = config.GlobalFlags
-
-	app.Commands = []cli.Command{
-		commands.StartCommand,
-		commands.StopCommand,
-		commands.StatusCommand,
-		commands.IndexCommand,
-		commands.ImportCommand,
-		commands.CopyCommand,
-		commands.FacesCommand,
-		commands.PlacesCommand,
-		commands.PurgeCommand,
-		commands.CleanUpCommand,
-		commands.OptimizeCommand,
-		commands.MomentsCommand,
-		commands.ConvertCommand,
-		commands.ThumbsCommand,
-		commands.MigrateCommand,
-		commands.BackupCommand,
-		commands.RestoreCommand,
-		commands.ResetCommand,
-		commands.PasswdCommand,
-		commands.UsersCommand,
-		commands.ConfigCommand,
-		commands.VersionCommand,
-	}
+	app.Flags = config.Flags.Cli()
+	app.Commands = commands.PhotoPrism
 
 	if err := app.Run(os.Args); err != nil {
 		log.Error(err)

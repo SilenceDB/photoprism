@@ -21,7 +21,7 @@
                     <div class="v-table__overflow">
                       <table class="v-datatable v-table theme--light photo-files">
                         <tbody>
-                        <tr v-if="file.Type === 'jpg'">
+                        <tr v-if="file.FileType === 'jpg'">
                           <td>
                             <translate>Preview</translate>
                           </td>
@@ -45,7 +45,7 @@
                                    @click.stop.prevent="downloadFile(file)">
                               <translate>Download</translate>
                             </v-btn>
-                            <v-btn v-if="features.edit && file.Type === 'jpg' && !file.Error && !file.Primary" small depressed dark
+                            <v-btn v-if="features.edit && file.FileType === 'jpg' && !file.Error && !file.Primary" small depressed dark
                                    color="primary-button"
                                    class="ma-0 action-primary"
                                    @click.stop.prevent="primaryFile(file)">
@@ -82,17 +82,17 @@
                           </td>
                           <td>{{ file.Hash }}</td>
                         </tr>
-                        <tr v-if="file.Root.length > 1">
-                          <td>
-                            <translate>Storage Folder</translate>
-                          </td>
-                          <td>{{ file.Root | capitalize }}</td>
-                        </tr>
                         <tr v-if="file.Name">
                           <td>
-                            <translate>Name</translate>
+                            <translate>Filename</translate>
                           </td>
                           <td>{{ file.Name }}</td>
+                        </tr>
+                        <tr v-if="file.Root">
+                          <td>
+                            <translate>Storage</translate>
+                          </td>
+                          <td>{{ file.storageInfo() }}</td>
                         </tr>
                         <tr v-if="file.OriginalName">
                           <td>
@@ -106,17 +106,35 @@
                           </td>
                           <td>{{ file.sizeInfo() }}</td>
                         </tr>
-                        <tr v-if="file.Type">
+                        <tr v-if="file.FileType">
                           <td>
                             <translate>Type</translate>
                           </td>
                           <td>{{ file.typeInfo() }}</td>
                         </tr>
-                        <tr v-if="file.Codec">
+                        <tr v-if="file.Codec && file.Codec !== file.FileType">
                           <td>
                             <translate>Codec</translate>
                           </td>
-                          <td>{{ file.Codec | uppercase }}</td>
+                          <td>{{ codecName(file) }}</td>
+                        </tr>
+                        <tr v-if="file.Duration && file.Duration > 0">
+                          <td>
+                            <translate>Duration</translate>
+                          </td>
+                          <td>{{ formatDuration(file) }}</td>
+                        </tr>
+                        <tr v-if="file.Frames">
+                          <td>
+                            <translate>Frames</translate>
+                          </td>
+                          <td>{{ file.Frames }}</td>
+                        </tr>
+                        <tr v-if="file.FPS">
+                          <td>
+                            <translate>FPS</translate>
+                          </td>
+                          <td>{{ file.FPS.toFixed(1) }}</td>
                         </tr>
                         <tr v-if="file.Primary">
                           <td>
@@ -152,14 +170,14 @@
                           <td>
                             <translate>Aspect Ratio</translate>
                           </td>
-                          <td>{{ file.AspectRatio }}</td>
+                          <td>{{ file.AspectRatio }} : 1</td>
                         </tr>
                         <tr v-if="file.Orientation">
                           <td>
                             <translate>Orientation</translate>
                           </td>
                           <td>
-                            <translate>{{ file.Orientation }}</translate>
+                            <v-icon :class="`orientation-${file.Orientation}`">portrait</v-icon>
                           </td>
                         </tr>
                         <tr v-if="file.ColorProfile">
@@ -178,7 +196,7 @@
                           <td>
                             <translate>Chroma</translate>
                           </td>
-                          <td>{{ file.Chroma }} / 100</td>
+                          <td><v-progress-linear :value="file.Chroma" style="max-width: 300px;" :title="`${file.Chroma}%`"></v-progress-linear></td>
                         </tr>
                         <tr v-if="file.Missing">
                           <td>
@@ -225,12 +243,16 @@
 <script>
 import Thumb from "model/thumb";
 import {DateTime} from "luxon";
-import Notify from "../../common/notify";
+import Notify from "common/notify";
+import Util from "common/util";
 
 export default {
   name: 'PTabPhotoFiles',
   props: {
-    model: Object,
+    model: {
+      type: Object,
+      default: () => {},
+    },
     uid: String,
   },
   data() {
@@ -262,6 +284,27 @@ export default {
   },
   computed: {},
   methods: {
+    formatDuration(file) {
+      if (!file || !file.Duration) {
+        return "";
+      }
+
+      return Util.duration(file.Duration);
+    },
+    fileType(file) {
+      if (!file || !file.FileType) {
+        return "";
+      }
+
+      return Util.fileType(file.FileType);
+    },
+    codecName(file) {
+      if (!file || !file.Codec) {
+        return "";
+      }
+
+      return Util.codecName(file.Codec);
+    },
     openFile(file) {
       this.$viewer.show([Thumb.fromFile(this.model, file)], 0);
     },

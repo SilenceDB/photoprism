@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/photoprism/photoprism/pkg/clean"
 	"github.com/photoprism/photoprism/pkg/s2"
-	"github.com/photoprism/photoprism/pkg/sanitize"
 	"github.com/photoprism/photoprism/pkg/txt"
 )
 
@@ -31,15 +31,15 @@ const ApiName = "places"
 
 var Key = "f60f5b25d59c397989e3cd374f81cdd7710a4fca"
 var Secret = "photoprism"
-var UserAgent = "PhotoPrism/dev"
+var UserAgent = ""
 var ReverseLookupURL = "https://places.photoprism.app/v1/location/%s"
 
 var Retries = 3
 var RetryDelay = 33 * time.Millisecond
-var client = &http.Client{Timeout: 60 * time.Second}
 
 // FindLocation retrieves location details from the backend API.
 func FindLocation(id string) (result Location, err error) {
+
 	// Normalize S2 Cell ID.
 	id = s2.NormalizeToken(id)
 
@@ -47,7 +47,7 @@ func FindLocation(id string) (result Location, err error) {
 	if len(id) == 0 {
 		return result, fmt.Errorf("empty cell id")
 	} else if n := len(id); n < 4 || n > 16 {
-		return result, fmt.Errorf("invalid cell id %s", sanitize.Log(id))
+		return result, fmt.Errorf("invalid cell id %s", clean.Log(id))
 	}
 
 	// Remember start time.
@@ -84,9 +84,11 @@ func FindLocation(id string) (result Location, err error) {
 		return result, err
 	}
 
-	// Add User-Agent header?
+	// Set user agent.
 	if UserAgent != "" {
 		req.Header.Set("User-Agent", UserAgent)
+	} else {
+		req.Header.Set("User-Agent", "PhotoPrism/Test")
 	}
 
 	// Add API key?
@@ -96,6 +98,15 @@ func FindLocation(id string) (result Location, err error) {
 	}
 
 	var r *http.Response
+
+	// Create new http.Client.
+	//
+	// NOTE: Timeout specifies a time limit for requests made by
+	// this Client. The timeout includes connection time, any
+	// redirects, and reading the response body. The timer remains
+	// running after Get, Head, Post, or Do return and will
+	// interrupt reading of the Response.Body.
+	client := &http.Client{Timeout: 60 * time.Second}
 
 	// Perform request.
 	for i := 0; i < Retries; i++ {
@@ -134,7 +145,7 @@ func FindLocation(id string) (result Location, err error) {
 	}
 
 	cache.SetDefault(id, result)
-	log.Tracef("places: cached cell %s [%s]", sanitize.Log(id), time.Since(start))
+	log.Tracef("places: cached cell %s [%s]", clean.Log(id), time.Since(start))
 
 	result.Cached = false
 
@@ -193,7 +204,7 @@ func (l Location) CountryCode() (result string) {
 
 // State returns the location address state name.
 func (l Location) State() (result string) {
-	return sanitize.State(l.Place.LocState, l.CountryCode())
+	return clean.State(l.Place.LocState, l.CountryCode())
 }
 
 // Latitude returns the location position latitude.

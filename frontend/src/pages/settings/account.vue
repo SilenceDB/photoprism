@@ -11,6 +11,8 @@
                   type="password"
                   :disabled="busy"
                   browser-autocomplete="off"
+                  autocorrect="off"
+                  autocapitalize="none"
                   :label="$gettext('Current Password')"
                   class="input-current-password"
                   color="secondary-dark"
@@ -25,11 +27,13 @@
                   type="password"
                   :disabled="busy"
                   browser-autocomplete="off"
+                  autocorrect="off"
+                  autocapitalize="none"
                   :label="$gettext('New Password')"
                   class="input-new-password"
                   color="secondary-dark"
                   placeholder="••••••••"
-                  :hint="$gettext('At least 6 characters.')"
+                  :hint="$gettext('Must have at least 8 characters.')"
               ></v-text-field>
             </v-flex>
 
@@ -40,6 +44,8 @@
                   type="password"
                   :disabled="busy"
                   browser-autocomplete="off"
+                  autocorrect="off"
+                  autocapitalize="none"
                   :label="$gettext('Retype Password')"
                   class="input-retype-password"
                   color="secondary-dark"
@@ -91,7 +97,7 @@ export default {
   },
   methods: {
     disabled() {
-      return (this.demo || this.busy || this.oldPassword === "" || this.newPassword.length < 6 || (this.newPassword !== this.confirmPassword));
+      return (this.demo || this.busy || this.oldPassword === "" || this.newPassword.length < 8 || (this.newPassword !== this.confirmPassword));
     },
     confirm() {
       this.busy = true;

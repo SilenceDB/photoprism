@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/photoprism/photoprism/pkg/projection"
+
 	"github.com/photoprism/photoprism/internal/config"
 	"github.com/photoprism/photoprism/internal/meta"
 	"github.com/stretchr/testify/assert"
@@ -230,7 +232,7 @@ func TestMediaFile_Exif_JPEG(t *testing.T) {
 		assert.Equal(t, "", data.CameraSerial)
 		assert.Equal(t, 6, data.FocalLength)
 		assert.Equal(t, 1, data.Orientation)
-		assert.Equal(t, "equirectangular", data.Projection)
+		assert.Equal(t, projection.Equirectangular.String(), data.Projection)
 	})
 
 	t.Run("digikam.jpg", func(t *testing.T) {
@@ -325,7 +327,15 @@ func TestMediaFile_Exif_HEIF(t *testing.T) {
 
 	convert := NewConvert(conf)
 
-	jpeg, err := convert.ToJpeg(img)
+	// Create JPEG.
+	jpeg, err := convert.ToJpeg(img, false)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Replace JPEG.
+	jpeg, err = convert.ToJpeg(img, true)
 
 	if err != nil {
 		t.Fatal(err)
